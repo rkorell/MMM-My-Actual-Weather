@@ -1,0 +1,7 @@
+{
+    "LOADING": "Wetterdaten werden geladen...",
+    "NO_WEATHER_DATA": "Keine Wetterdaten verfügbar.",
+    "NO_WIND_DATA": "Keine Winddaten.",
+    "NO_PRECIPITATION_DATA": "Keine Niederschlagsdaten.",
+    "PRECIPITATION": "Niederschlag"
+}

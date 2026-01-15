@@ -1,0 +1,19 @@
+{
+  "name": "mmm-my-actual-weather",
+  "version": "1.0.0",
+  "description": "A simple MagicMirror module to display current weather from a PWS via Wunderground and Open-Meteo.",
+  "main": "MMM-My-Actual-Weather.js",
+  "keywords": [
+    "magicmirror",
+    "weather",
+    "wunderground",
+    "open-meteo",
+    "pws"
+  ],
+  "author": "Ralf Korell, MD",
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^2.6.1",
+    "suncalc": "^1.9.0"
+  }
+}
