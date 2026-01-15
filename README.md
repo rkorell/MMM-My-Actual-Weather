@@ -14,13 +14,7 @@ MagicMirror² Modul für aktuelle Wetterdaten von einer eigenen Personal Weather
 
 ## Screenshot
 
-```
-     ☀️  12.5°
-   💨 8.2 km/h NW
-   WoZi: 21.3°C
-   Therapie: 19.8°C
-   Niederschlag: 0.0 mm  14:35
-```
+![MMM-My-Actual-Weather](img/MyActualWeather.png)
 
 ## Installation
 
