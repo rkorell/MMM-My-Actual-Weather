@@ -1,6 +1,10 @@
 // node_helper.js for MMM-My-Actual-Weather
 // Modified: 2026-01-14, 14:30 - AP 1.1 + 1.2: Added HTTP server for PWS push data, parsing, unit conversion, and fallback logic
 // Modified: 2026-01-14, 16:35 - AP 1.6: Immediate frontend notification on PWS push, debug log for timestamp
+// Modified: 2026-01-15, 14:30 - AP 2: Open-Meteo Caching, PWS-Verbindungsstatus, Logging auf debug
+// Modified: 2026-01-15, 15:45 - AP 2: Design-Fix: processPwsPush() sendet direkt ans Frontend (keine Race Condition mehr)
+// Modified: 2026-01-15, 16:15 - AP 2: State Machine für saubere PWS/API Koordination
+// Modified: 2026-01-15, 17:00 - AP 2: Bug-Fixes: API-Daten bei WAITING_FOR_PWS/API_ONLY senden und aktualisieren
 
 const NodeHelper = require("node_helper");
 const fetch = require("node-fetch"); // For API requests
@@ -11,25 +15,335 @@ const http = require("http"); // For PWS push server
 module.exports = NodeHelper.create({
     start: function() {
         console.log("MMM-My-Actual-Weather: Starting node_helper.");
+
+        // Core data
         this.pwsData = null; // Stores the latest PWS push data
         this.lastPushTime = null; // Timestamp of last PWS push
+        this.configData = null; // Store config for use in server callbacks
+        this.apiDataCache = null; // Cached API data for fallback
+
+        // Server
         this.pwsServerStarted = false; // Flag to prevent multiple server starts
         this.httpServer = null; // Reference to HTTP server
-        this.fallbackTimer = null; // Timer for fallback check
-        this.configData = null; // Store config for use in server callbacks
+
+        // Open-Meteo Caching
+        this.lastOpenMeteoFetch = null; // Timestamp of last Open-Meteo fetch
+        this.cachedOpenMeteoData = null; // Cached weather icon data
+
+        // State Machine
+        // States: INITIALIZING | PWS_ACTIVE | WAITING_FOR_PWS | API_ONLY
+        this.state = "INITIALIZING";
+        this.initialWaitTimer = null; // Timer for initial PWS wait (3 sec)
+        this.pwsTimeoutTimer = null; // Timer for PWS timeout detection
+        this.recheckTimer = null; // Timer for periodic recheck (60 min)
+
+        // Timing constants (will be set from config)
+        this.INITIAL_WAIT_MS = 3000; // 3 seconds initial wait
+        this.PWS_TIMEOUT_MS = 180000; // 3x push interval (180 sec)
+        this.RECHECK_INTERVAL_MS = 3600000; // 60 minutes
     },
 
     socketNotificationReceived: function(notification, payload) {
         if (notification === "FETCH_WEATHER") {
             this.configData = payload; // Store config
+
+            // Calculate timing constants from config
+            const pushInterval = payload.pwsPushInterval || 60; // seconds
+            this.INITIAL_WAIT_MS = Math.max(3000, pushInterval * 50); // 5% of push interval, min 3 sec
+            this.PWS_TIMEOUT_MS = pushInterval * 3 * 1000; // 3x push interval
+
             // Start PWS server on first FETCH_WEATHER if not already started
             if (!this.pwsServerStarted && payload.pwsPushPort > 0) {
                 this.startPwsServer(payload.pwsPushPort);
+                // Initialize State Machine
+                this.initializeStateMachine();
+            } else if (this.state === "PWS_ACTIVE") {
+                // PWS active - just refresh Open-Meteo cache (PWS push will send data)
+                this.refreshOpenMeteoCache();
+            } else if (this.state === "WAITING_FOR_PWS" || this.state === "API_ONLY") {
+                // API mode - reload API data and send to frontend (Bug 2 fix)
+                this.loadApiDataInBackground();
             }
-            this.fetchWeatherData(payload);
         } else if (notification === "FETCH_SVG_ICON") {
             this.fetchSvgIcon();
         }
+    },
+
+    // ==================== STATE MACHINE ====================
+
+    // Initialize the state machine
+    initializeStateMachine: function() {
+        console.log("MMM-My-Actual-Weather: Initializing State Machine");
+        this.transitionTo("INITIALIZING");
+
+        // Load API data in parallel (non-blocking)
+        this.loadApiDataInBackground();
+
+        // Start initial wait timer
+        this.startInitialWaitTimer();
+    },
+
+    // Transition to a new state
+    transitionTo: function(newState) {
+        const oldState = this.state;
+        this.state = newState;
+        console.log(`MMM-My-Actual-Weather: State ${oldState} → ${newState}`);
+
+        // Clear all timers on state change
+        this.clearAllTimers();
+
+        // State-specific actions
+        switch (newState) {
+            case "INITIALIZING":
+                // Nothing to send yet, waiting for push or timeout
+                break;
+
+            case "PWS_ACTIVE":
+                // Start PWS timeout timer
+                this.startPwsTimeoutTimer();
+                // Send PWS data to frontend
+                this.sendToFrontend();
+                break;
+
+            case "WAITING_FOR_PWS":
+                // Start wait timeout timer (max 3x push interval)
+                this.startWaitingForPwsTimer();
+                // Send API data with "waiting for PWS" flag
+                this.sendToFrontend();
+                break;
+
+            case "API_ONLY":
+                // Start recheck timer (60 min)
+                this.startRecheckTimer();
+                // Send API data without "waiting for PWS" flag
+                this.sendToFrontend();
+                break;
+        }
+    },
+
+    // Clear all timers
+    clearAllTimers: function() {
+        if (this.initialWaitTimer) {
+            clearTimeout(this.initialWaitTimer);
+            this.initialWaitTimer = null;
+        }
+        if (this.pwsTimeoutTimer) {
+            clearTimeout(this.pwsTimeoutTimer);
+            this.pwsTimeoutTimer = null;
+        }
+        if (this.recheckTimer) {
+            clearTimeout(this.recheckTimer);
+            this.recheckTimer = null;
+        }
+    },
+
+    // Timer: Initial wait for PWS (3 seconds)
+    startInitialWaitTimer: function() {
+        const self = this;
+        this.initialWaitTimer = setTimeout(async function() {
+            if (self.state === "INITIALIZING") {
+                console.log("MMM-My-Actual-Weather: Initial wait timeout, no PWS push received");
+
+                // Wait for API data if not yet loaded
+                if (!self.apiDataCache) {
+                    console.log("MMM-My-Actual-Weather: Waiting for API data...");
+                    // Poll for API data (max 10 seconds)
+                    for (let i = 0; i < 20 && !self.apiDataCache && self.state === "INITIALIZING"; i++) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
+
+                // Only transition if still in INITIALIZING (PWS may have arrived)
+                if (self.state === "INITIALIZING") {
+                    self.transitionTo("WAITING_FOR_PWS");
+                }
+            }
+        }, this.INITIAL_WAIT_MS);
+    },
+
+    // Timer: PWS timeout (no push received in 3x interval)
+    startPwsTimeoutTimer: function() {
+        const self = this;
+        this.pwsTimeoutTimer = setTimeout(async function() {
+            if (self.state === "PWS_ACTIVE") {
+                console.log("MMM-My-Actual-Weather: PWS timeout, no push received");
+                // Bug 3 fix: Reload API data before transitioning
+                await self.loadApiDataInBackground();
+                self.transitionTo("WAITING_FOR_PWS");
+            }
+        }, this.PWS_TIMEOUT_MS);
+    },
+
+    // Timer: Waiting for PWS timeout (give up after 3x interval)
+    startWaitingForPwsTimer: function() {
+        const self = this;
+        this.pwsTimeoutTimer = setTimeout(function() {
+            if (self.state === "WAITING_FOR_PWS") {
+                console.log("MMM-My-Actual-Weather: PWS not responding, switching to API only");
+                self.transitionTo("API_ONLY");
+            }
+        }, this.PWS_TIMEOUT_MS);
+    },
+
+    // Timer: Recheck for PWS (every 60 minutes)
+    startRecheckTimer: function() {
+        const self = this;
+        this.recheckTimer = setTimeout(async function() {
+            if (self.state === "API_ONLY") {
+                console.log("MMM-My-Actual-Weather: Rechecking for PWS availability");
+                // Bug 4 fix: Load fresh API data
+                await self.loadApiDataInBackground();
+                self.transitionTo("INITIALIZING");
+                self.startInitialWaitTimer();
+            }
+        }, this.RECHECK_INTERVAL_MS);
+    },
+
+    // Load API data in background (non-blocking)
+    loadApiDataInBackground: async function() {
+        if (!this.configData) return;
+
+        try {
+            const config = this.configData;
+            const dataObjectKey = (config.units === "e" || config.units === "h") ? "imperial" : "metric";
+            const wundergroundUrl = `${config.baseURL}&units=${config.units}&numericPrecision=${config.numericPrecision}&stationId=${config.stationId}&apiKey=${config.apiKey}`;
+
+            const response = await fetch(wundergroundUrl);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.observations && data.observations.length > 0) {
+                    const obs = data.observations[0][dataObjectKey];
+                    const currentObs = data.observations[0];
+
+                    this.apiDataCache = {
+                        temp: obs.temp,
+                        windSpeed: obs.windSpeed,
+                        precipTotal: obs.precipTotal,
+                        windDirection: this.getWindDirection(currentObs.winddir, config.lang),
+                        temp1: null,
+                        temp2: null,
+                        humidity1: null,
+                        humidity2: null,
+                        timestamp: null,
+                        isLocalData: false
+                    };
+                    console.log("MMM-My-Actual-Weather: API data loaded in background");
+                }
+            }
+        } catch (error) {
+            console.error("MMM-My-Actual-Weather: Error loading API data in background:", error.message);
+        }
+
+        // Also load Open-Meteo
+        await this.refreshOpenMeteoCache();
+
+        // If in WAITING_FOR_PWS or API_ONLY, send data now (Bug 1 fix)
+        if (this.state === "WAITING_FOR_PWS" || this.state === "API_ONLY") {
+            console.log("MMM-My-Actual-Weather: API data ready, sending to frontend");
+            this.sendToFrontend();
+        }
+    },
+
+    // Refresh Open-Meteo cache
+    refreshOpenMeteoCache: async function() {
+        if (!this.configData) return;
+
+        const config = this.configData;
+        const currentTime = Date.now();
+
+        // Only refresh if cache is expired
+        if (this.lastOpenMeteoFetch !== null &&
+            this.cachedOpenMeteoData !== null &&
+            (currentTime - this.lastOpenMeteoFetch) < config.updateInterval) {
+            return; // Cache still valid
+        }
+
+        const openMeteoUrl = `${config.openMeteoUrl}?latitude=${config.latitude}&longitude=${config.longitude}&current_weather=true&forecast_days=1`;
+        try {
+            const response = await fetch(openMeteoUrl);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.current_weather && data.current_weather.weathercode !== undefined) {
+                    this.cachedOpenMeteoData = { weatherCode: data.current_weather.weathercode };
+                    this.lastOpenMeteoFetch = currentTime;
+                }
+            }
+        } catch (error) {
+            console.error("MMM-My-Actual-Weather: Error refreshing Open-Meteo cache:", error.message);
+        }
+    },
+
+    // Central function to send data to frontend based on current state
+    sendToFrontend: async function() {
+        if (!this.configData) return;
+
+        const config = this.configData;
+        let weatherData = {};
+
+        // Determine data source based on state
+        if (this.state === "PWS_ACTIVE" && this.pwsData) {
+            // Use PWS data
+            weatherData = {
+                temp: this.pwsData.temp,
+                windSpeed: this.pwsData.windSpeed,
+                precipTotal: this.pwsData.precipTotal,
+                windDirection: this.getWindDirection(this.pwsData.winddir, config.lang),
+                temp1: this.pwsData.temp1,
+                humidity1: this.pwsData.humidity1,
+                temp2: this.pwsData.temp2,
+                humidity2: this.pwsData.humidity2,
+                timestamp: this.pwsData.timestamp,
+                isLocalData: true,
+                waitingForPws: false
+            };
+        } else if (this.apiDataCache) {
+            // Use API data
+            weatherData = {
+                temp: this.apiDataCache.temp,
+                windSpeed: this.apiDataCache.windSpeed,
+                precipTotal: this.apiDataCache.precipTotal,
+                windDirection: this.apiDataCache.windDirection,
+                temp1: null,
+                temp2: null,
+                humidity1: null,
+                humidity2: null,
+                timestamp: null,
+                isLocalData: false,
+                waitingForPws: (this.state === "WAITING_FOR_PWS")
+            };
+        } else {
+            // No data available yet
+            console.log("MMM-My-Actual-Weather: No data available to send");
+            return;
+        }
+
+        // Calculate day/night
+        let isDay = true;
+        if (config.latitude !== null && config.longitude !== null) {
+            const now = new Date();
+            const times = SunCalc.getTimes(now, config.latitude, config.longitude);
+            isDay = now > times.sunrise && now < times.sunset;
+        }
+        weatherData.isDay = isDay;
+
+        // Add weather icon from cache (or fetch if needed)
+        if (this.cachedOpenMeteoData !== null) {
+            weatherData.weatherCode = this.cachedOpenMeteoData.weatherCode;
+            weatherData.weatherIconClass = this.getWeatherIcon(this.cachedOpenMeteoData.weatherCode, isDay);
+        } else {
+            // Try to fetch Open-Meteo now
+            await this.refreshOpenMeteoCache();
+            if (this.cachedOpenMeteoData !== null) {
+                weatherData.weatherCode = this.cachedOpenMeteoData.weatherCode;
+                weatherData.weatherIconClass = this.getWeatherIcon(this.cachedOpenMeteoData.weatherCode, isDay);
+            } else {
+                weatherData.weatherCode = null;
+                weatherData.weatherIconClass = "wi-na";
+            }
+        }
+
+        // Send to frontend
+        this.sendSocketNotification("WEATHER_DATA", weatherData);
     },
 
     // Start HTTP server for PWS push data
@@ -81,11 +395,6 @@ module.exports = NodeHelper.create({
             data[key] = value;
         }
 
-        // Log first push reception
-        if (this.lastPushTime === null) {
-            console.log("MMM-My-Actual-Weather: First PWS push received, switching to local data");
-        }
-
         // Update timestamp
         this.lastPushTime = Date.now();
 
@@ -111,12 +420,16 @@ module.exports = NodeHelper.create({
             isLocalData: true
         };
 
-        // Notify frontend about new PWS data availability
-        // The actual weather data will be sent via fetchWeatherData
-
-        // Immediately fetch weather data and send to frontend
-        if (this.configData) {
-            this.fetchWeatherData(this.configData);
+        // State Machine: Handle PWS push based on current state
+        if (this.state === "PWS_ACTIVE") {
+            // Already in PWS_ACTIVE - just reset timer and send data
+            this.clearAllTimers();
+            this.startPwsTimeoutTimer();
+            this.sendToFrontend();
+        } else {
+            // Transition to PWS_ACTIVE from any other state
+            console.log("MMM-My-Actual-Weather: PWS push received, switching to PWS_ACTIVE");
+            this.transitionTo("PWS_ACTIVE");
         }
     },
 
@@ -147,110 +460,6 @@ module.exports = NodeHelper.create({
         return inches * 25.4;
     },
 
-    // Check if PWS data is still valid (not timed out)
-    isPwsDataValid: function(fallbackTimeout) {
-        if (this.lastPushTime === null || this.pwsData === null) {
-            return false;
-        }
-        const timeSinceLastPush = (Date.now() - this.lastPushTime) / 1000; // in seconds
-        return timeSinceLastPush < fallbackTimeout;
-    },
-
-    fetchWeatherData: async function(config) {
-        let weatherData = {};
-        const fallbackTimeout = config.pwsPushFallbackTimeout || 180;
-
-        // Check if we have valid PWS push data
-        if (this.isPwsDataValid(fallbackTimeout)) {
-            // Use PWS push data
-            console.log("MMM-My-Actual-Weather: Using PWS data, timestamp=" + this.pwsData.timestamp);
-            weatherData.temp = this.pwsData.temp;
-            weatherData.windSpeed = this.pwsData.windSpeed;
-            weatherData.precipTotal = this.pwsData.precipTotal;
-            weatherData.windDirection = this.getWindDirection(this.pwsData.winddir, config.lang);
-            weatherData.temp1 = this.pwsData.temp1;
-            weatherData.humidity1 = this.pwsData.humidity1;
-            weatherData.temp2 = this.pwsData.temp2;
-            weatherData.humidity2 = this.pwsData.humidity2;
-            weatherData.timestamp = this.pwsData.timestamp;
-            weatherData.isLocalData = true;
-        } else {
-            // Fallback to Wunderground API
-            if (this.lastPushTime !== null) {
-                // Only log if we previously had push data
-                console.log("MMM-My-Actual-Weather: PWS push timeout, falling back to API");
-            }
-
-            // Determine which data object to use based on units
-            const dataObjectKey = (config.units === "e" || config.units === "h") ? "imperial" : "metric";
-
-            const wundergroundUrl = `${config.baseURL}&units=${config.units}&numericPrecision=${config.numericPrecision}&stationId=${config.stationId}&apiKey=${config.apiKey}`;
-            try {
-                const response = await fetch(wundergroundUrl);
-                if (!response.ok) {
-                    throw new Error(`Wunderground API error: ${response.statusText}`);
-                }
-                const data = await response.json();
-
-                if (data.observations && data.observations.length > 0) {
-                    const obs = data.observations[0][dataObjectKey];
-                    const currentObs = data.observations[0];
-
-                    weatherData.temp = obs.temp;
-                    weatherData.windSpeed = obs.windSpeed;
-                    weatherData.precipTotal = obs.precipTotal;
-                    weatherData.windDirection = this.getWindDirection(currentObs.winddir, config.lang);
-                } else {
-                    throw new Error("No observations found in Wunderground response.");
-                }
-            } catch (error) {
-                console.error("MMM-My-Actual-Weather: Error fetching Wunderground data:", error);
-                this.sendSocketNotification("WEATHER_ERROR", `Wunderground: ${error.message}`);
-                return;
-            }
-
-            // API data: no sensors, no timestamp
-            weatherData.temp1 = null;
-            weatherData.temp2 = null;
-            weatherData.humidity1 = null;
-            weatherData.humidity2 = null;
-            weatherData.timestamp = null;
-            weatherData.isLocalData = false;
-        }
-
-        // Determine if it's day or night based on current time and location
-        let isDay = true;
-        if (config.latitude !== null && config.longitude !== null) {
-            const now = new Date();
-            const times = SunCalc.getTimes(now, config.latitude, config.longitude);
-            isDay = now > times.sunrise && now < times.sunset;
-        }
-        weatherData.isDay = isDay;
-
-        // Open-Meteo API Query for weather icon (always needed, regardless of data source)
-        const openMeteoUrl = `${config.openMeteoUrl}?latitude=${config.latitude}&longitude=${config.longitude}&current_weather=true&forecast_days=1`;
-        try {
-            const response = await fetch(openMeteoUrl);
-            if (!response.ok) {
-                throw new Error(`Open-Meteo API error: ${response.statusText}`);
-            }
-            const data = await response.json();
-
-            if (data.current_weather && data.current_weather.weathercode !== undefined) {
-                weatherData.weatherCode = data.current_weather.weathercode;
-                weatherData.weatherIconClass = this.getWeatherIcon(data.current_weather.weathercode, isDay);
-            } else {
-                throw new Error("No current_weather or weathercode found in Open-Meteo response.");
-            }
-        } catch (error) {
-            console.error("MMM-My-Actual-Weather: Error fetching Open-Meteo data:", error);
-            this.sendSocketNotification("WEATHER_ERROR", `Open-Meteo: ${error.message}`);
-            return;
-        }
-
-        // Send the combined data to the main module
-        this.sendSocketNotification("WEATHER_DATA", weatherData);
-    },
 
     // Function to read and send SVG icon content
     fetchSvgIcon: async function() {

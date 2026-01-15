@@ -2,6 +2,7 @@
 // Modul for reading PWS - initial via WeatherUnderground Cloud query
 // (c) Dr. Ralf Korell, 2025/2026
 // Modified: 2026-01-14, 15:00 - AP 1.3 + 1.4: Added PWS push config parameters, sensor display, timestamp display
+// Modified: 2026-01-15, 14:30 - AP 2: Gradient-Farben cachen, PWS-Verbindungsstatus, Logging auf debug
 
 
 
@@ -18,7 +19,7 @@ Module.register("MMM-My-Actual-Weather", {
         document.body.removeChild(tempDiv);
 
         // --- ADDED LOGGING FOR DEBUGGING (from previous step) ---
-        Log.log(`MMM-My-Actual-Weather: Resolving color "${colorString}" -> Computed: "${computedColor}"`);
+        Log.debug(`MMM-My-Actual-Weather: Resolving color "${colorString}" -> Computed: "${computedColor}"`);
         // --- END ADDED LOGGING ---
 
         const match = computedColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
@@ -101,6 +102,7 @@ Module.register("MMM-My-Actual-Weather", {
         this.weatherData = null; // Stores the fetched weather data
         this.windSvgContent = null; // Property to store SVG content
         this.loaded = false; // Flag if data has been loaded
+        this.resolvedGradientPoints = null; // Cached gradient colors (resolved to RGB)
         this.getWeatherData(); // Starts the first data fetch
         this.getSvgIcon(); // Fetch SVG content on start
         this.scheduleUpdate(); // Schedules recurring updates
@@ -126,20 +128,24 @@ Module.register("MMM-My-Actual-Weather", {
             return this.config.temperatureColor; // Use fixed color if not sensitive
         }
 
-        // Resolve named colors and sort gradient points by temperature
-        const gradientPoints = this.config.tempColorGradient
-            // Store original color name as 'colorName' and resolved RGB as 'rgb'
-            .map(point => ({ temp: point.temp, colorName: point.color, rgb: this.cssColorToRgb(point.color) }))
-            .sort((a, b) => a.temp - b.temp); // Ensure points are sorted by temperature
+        // Resolve and cache gradient points on first call (DOM must be available)
+        if (this.resolvedGradientPoints === null) {
+            this.resolvedGradientPoints = this.config.tempColorGradient
+                .map(point => ({ temp: point.temp, colorName: point.color, rgb: this.cssColorToRgb(point.color) }))
+                .sort((a, b) => a.temp - b.temp);
+            Log.debug("MMM-My-Actual-Weather: Gradient colors resolved and cached");
+        }
 
-        Log.log(`MMM-My-Actual-Weather: Calculating color for temp ${temp}°C`);
+        const gradientPoints = this.resolvedGradientPoints;
+
+        Log.debug(`MMM-My-Actual-Weather: Calculating color for temp ${temp}°C`);
 
         if (gradientPoints.length === 0) {
             Log.warn("MMM-My-Actual-Weather: tempColorGradient is empty. Defaulting to white.");
             return "rgb(255, 255, 255)"; // Fallback if no gradient points are defined
         }
         if (gradientPoints.length === 1) {
-            Log.log(`MMM-My-Actual-Weather: Only one gradient point. Using color: rgb(${gradientPoints[0].rgb.r}, ${gradientPoints[0].rgb.g}, ${gradientPoints[0].rgb.b})`);
+            Log.debug(`MMM-My-Actual-Weather: Only one gradient point. Using color: rgb(${gradientPoints[0].rgb.r}, ${gradientPoints[0].rgb.g}, ${gradientPoints[0].rgb.b})`);
             return `rgb(${gradientPoints[0].rgb.r}, ${gradientPoints[0].rgb.g}, ${gradientPoints[0].rgb.b})`; // Only one point, use its color
         }
 
@@ -157,11 +163,11 @@ Module.register("MMM-My-Actual-Weather", {
 
         // Handle temperatures outside the defined range
         if (temp < gradientPoints[0].temp) {
-            Log.log(`MMM-My-Actual-Weather: Temp ${temp}°C below lowest point ${gradientPoints[0].temp}°C. Using color of lowest point (${gradientPoints[0].colorName}).`);
+            Log.debug(`MMM-My-Actual-Weather: Temp ${temp}°C below lowest point ${gradientPoints[0].temp}°C. Using color of lowest point (${gradientPoints[0].colorName}).`);
             return `rgb(${gradientPoints[0].rgb.r}, ${gradientPoints[0].rgb.g}, ${gradientPoints[0].rgb.b})`;
         }
         if (temp > gradientPoints[gradientPoints.length - 1].temp) {
-            Log.log(`MMM-My-Actual-Weather: Temp ${temp}°C above highest point ${gradientPoints[gradientPoints.length - 1].temp}°C. Using color of highest point (${gradientPoints[gradientPoints.length - 1].colorName}).`);
+            Log.debug(`MMM-My-Actual-Weather: Temp ${temp}°C above highest point ${gradientPoints[gradientPoints.length - 1].temp}°C. Using color of highest point (${gradientPoints[gradientPoints.length - 1].colorName}).`);
             return `rgb(${gradientPoints[gradientPoints.length - 1].rgb.r}, ${gradientPoints[gradientPoints.length - 1].rgb.g}, ${gradientPoints[gradientPoints.length - 1].rgb.b})`;
         }
 
@@ -181,7 +187,7 @@ Module.register("MMM-My-Actual-Weather", {
 
         const finalColor = `rgb(${r}, ${g}, ${b})`;
         // Log the colorName property, which now holds the original string
-        Log.log(`MMM-My-Actual-Weather: Temp ${temp}°C, Segment: ${lowerPoint.temp}°C (${lowerPoint.colorName}) to ${upperPoint.temp}°C (${upperPoint.colorName}), Factor: ${factor.toFixed(4)}, Final Color: ${finalColor}`);
+        Log.debug(`MMM-My-Actual-Weather: Temp ${temp}°C, Segment: ${lowerPoint.temp}°C (${lowerPoint.colorName}) to ${upperPoint.temp}°C (${upperPoint.colorName}), Factor: ${factor.toFixed(4)}, Final Color: ${finalColor}`);
         return finalColor;
     },
 
@@ -291,6 +297,13 @@ Module.register("MMM-My-Actual-Weather", {
                 sensor2Info.style.color = this.config.sensorTextColor;
                 wrapper.appendChild(sensor2Info);
             }
+        } else if (this.weatherData.waitingForPws) {
+            // Show PWS wait status when using API data and still waiting for first push
+            var pwsWaitInfo = document.createElement("div");
+            pwsWaitInfo.className = "sensor-info pws-wait";
+            pwsWaitInfo.innerHTML = this.translate("WAITING_FOR_PWS");
+            pwsWaitInfo.style.color = this.config.sensorTextColor;
+            wrapper.appendChild(pwsWaitInfo);
         }
 
         // --- Precipitation Section (below current weather) ---

@@ -3,5 +3,6 @@
     "NO_WEATHER_DATA": "No weather data available.",
     "NO_WIND_DATA": "No wind data.",
     "NO_PRECIPITATION_DATA": "No precipitation data.",
-    "PRECIPITATION": "Precipitation"
+    "PRECIPITATION": "Precipitation",
+    "WAITING_FOR_PWS": "waiting for PWS..."
 }
