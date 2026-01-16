@@ -1,123 +1,76 @@
-/* Basic style definitions for the module */
+/* MMM-My-Actual-Weather CSS */
 /* Modified: 2026-01-14, 15:30 - AP 1.5: Added sensor-info and data-timestamp styles */
+/* Modified: 2026-01-16, 10:30 - AP 3: Vereinfacht für Table-Layout, SVG-Container entfernt */
+
+/* Main wrapper */
 .MMM-My-Actual-Weather {
-    font-size: 20px;
-    text-align: right; /* Overall module alignment */
     line-height: 1.2;
-    display: flex; /* Make wrapper a flex container */
-    flex-direction: column; /* Stack sections vertically */
-    align-items: flex-end; /* Align sections to the right */
-    width: 100%; /* Ensure the module takes full available width */
 }
 
-/* Container for icon, temperature, and wind */
-.MMM-My-Actual-Weather .current-weather-wrapper {
-    position: relative; /* Needed for absolute positioning of wind-info */
-    width: 100%; /* Take full width of parent */
-    padding-bottom: 20px; /* Space for wind-info if it's positioned absolutely */
+/* Table layout */
+.MMM-My-Actual-Weather .weather-table {
+    border-collapse: collapse;
+    border-spacing: 0;
 }
 
-/* Group for Icon and Temperature */
-.MMM-My-Actual-Weather .weather-details {
-    display: flex; /* Arrange icon and temperature horizontally */
-    align-items: center; /* Vertically align icon and temperature */
-    justify-content: flex-start; /* Align to the left within its space */
-    width: 100%; /* Take full width to push wind to right if not absolute */
+/* Left cell: Weather icon */
+.MMM-My-Actual-Weather .icon-cell {
+    padding-right: 15px;
+    vertical-align: top;
 }
 
-/* Style for the weather icon */
-.MMM-My-Actual-Weather .icon {
-    font-size: 60px; /* Icon size */
-    line-height: 1; /* Adjust line height to reduce vertical space */
-    margin-right: 15px; /* Space between icon and temperature */
-    /* Position relative and adjust top to make it slightly "above" the temperature */
-    position: relative;
-    top: -10px; /* Adjust this value as needed for fine-tuning */
+/* Weather icon (large) */
+.MMM-My-Actual-Weather .weather-icon {
+    font-size: 60px;
+    line-height: 1;
 }
 
-/* Style for the temperature display */
-.MMM-My-Actual-Weather .temperature {
-    font-size: 70px; /* Larger temperature font size, mimicking default module */
-    font-weight: normal; /* Not bold */
-    line-height: 1; /* Adjust line height */
-    /* Color will be set inline by JavaScript */
+/* Right cells */
+.MMM-My-Actual-Weather .right-cell {
+    text-align: right;
+    vertical-align: top;
 }
 
-/* Wind Information */
+/* Wind information row */
 .MMM-My-Actual-Weather .wind-info {
-    position: absolute; /* Position absolutely to top right */
-    top: 0;
-    right: 0;
-    display: flex; /* Arrange wind icon, speed, direction horizontally */
-    align-items: center; /* Vertically align items */
-    font-size: 20px; /* Wind info font size */
-    white-space: nowrap; /* Prevent wrapping */
-    /* The color for the text and SVG is set here by JS: windInfo.style.color = this.config.windColor; */
-}
-
-/* Style for the SVG icon container */
-.MMM-My-Actual-Weather .wind-icon-svg-container {
-    display: flex; /* To align the SVG itself if it has internal elements */
-    align-items: center;
-    justify-content: center;
-    width: 25px; /* Size of the container */
-    height: 25px; /* Size of the container */
-    margin-right: 5px; /* Space between icon and speed */
-    /* The SVG inside will inherit the color from .wind-info */
-}
-
-.MMM-My-Actual-Weather .wind-icon-svg-container svg {
-    width: 100%; /* Make SVG fill its container */
-    height: 100%;
-    /* No explicit color here, it will inherit from .wind-info */
-}
-
-.MMM-My-Actual-Weather .wind-info .wind-speed {
-    margin-right: 5px; /* Space between speed and direction */
-}
-
-/* Sensor Information (additional temperature sensors) */
-.MMM-My-Actual-Weather .sensor-info {
-    width: 100%; /* Take full width */
-    text-align: right; /* Align to the right */
-    font-size: 16px; /* Same size as precipitation */
-    /* line-height: 1.1;*/
-    /* Color is set inline by JavaScript via sensorTextColor */
-}
-
-/* Data Source Timestamp */
-.MMM-My-Actual-Weather .data-timestamp {
-    font-size: 14px; /* Smaller than precipitation */
-    margin-left: 15px; /* Space between precipitation and timestamp */
-    /* Color is set inline by JavaScript via sensorTextColor */
-}
-
-/* Precipitation Information */
-.MMM-My-Actual-Weather .precipitation-info {
-    width: 100%; /* Take full width */
-    text-align: right; /* Align precipitation to the right */
-/*    margin-top: -25px; Pull precipitation closer to the elements above */
-}
-
-/* Style for precipitation amount */
-.MMM-My-Actual-Weather .precipitation {
     font-size: 20px;
-    /* Color will be set inline by JavaScript */
+    white-space: nowrap;
 }
 
-/* Example for customization in your custom.css */
-/* These rules should be placed in your ~/MagicMirror/css/custom.css
-   and will target the module's main wrapper when you add
-   classes: "weather_current_own" in your config.js.
-*/
-/*
-.weather_current_own .wi-fog  {
-    content: url("/css/icons/current/wsymbol_0007_fog.png");
+/* Wind icon (small, from font) */
+.MMM-My-Actual-Weather .wind-icon {
+    margin-right: 5px;
 }
-.weather_current_own .wi-day-sunny  {
-  content: url("/css/icons/current/wsymbol_0001_sunny.png");
+
+/* Wind speed */
+.MMM-My-Actual-Weather .wind-speed {
+    margin-right: 5px;
 }
-.weather_current_own .wi-night-clear  {
-  content: url("/css/icons/current/wsymbol_0008_clear_sky_night.png");
+
+/* Temperature */
+.MMM-My-Actual-Weather .temperature {
+    font-size: 70px;
+    font-weight: normal;
+    line-height: 1;
 }
-*/
+
+/* Sensor information */
+.MMM-My-Actual-Weather .sensor-info {
+    font-size: 16px;
+}
+
+/* Precipitation row */
+.MMM-My-Actual-Weather .precipitation-info {
+    font-size: 20px;
+}
+
+/* Precipitation text */
+.MMM-My-Actual-Weather .precipitation {
+    /* Color set by JavaScript */
+}
+
+/* Data timestamp */
+.MMM-My-Actual-Weather .data-timestamp {
+    font-size: 14px;
+    margin-left: 10px;
+}

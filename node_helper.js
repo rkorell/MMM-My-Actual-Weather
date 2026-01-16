@@ -5,11 +5,11 @@
 // Modified: 2026-01-15, 15:45 - AP 2: Design-Fix: processPwsPush() sendet direkt ans Frontend (keine Race Condition mehr)
 // Modified: 2026-01-15, 16:15 - AP 2: State Machine für saubere PWS/API Koordination
 // Modified: 2026-01-15, 17:00 - AP 2: Bug-Fixes: API-Daten bei WAITING_FOR_PWS/API_ONLY senden und aktualisieren
+// Modified: 2026-01-16, 10:30 - AP 3: SVG-Hack entfernt (Wind-Icon jetzt via Font)
 
 const NodeHelper = require("node_helper");
 const fetch = require("node-fetch"); // For API requests
 const SunCalc = require("suncalc"); // For sunrise/sunset calculations
-const fs = require("fs").promises; // For reading SVG file content
 const http = require("http"); // For PWS push server
 
 module.exports = NodeHelper.create({
@@ -64,8 +64,6 @@ module.exports = NodeHelper.create({
                 // API mode - reload API data and send to frontend (Bug 2 fix)
                 this.loadApiDataInBackground();
             }
-        } else if (notification === "FETCH_SVG_ICON") {
-            this.fetchSvgIcon();
         }
     },
 
@@ -458,19 +456,6 @@ module.exports = NodeHelper.create({
 
     inchesToMm: function(inches) {
         return inches * 25.4;
-    },
-
-
-    // Function to read and send SVG icon content
-    fetchSvgIcon: async function() {
-        const svgPath = this.path + "/img/wind-swirl.svg";
-        try {
-            const svgContent = await fs.readFile(svgPath, "utf8");
-            this.sendSocketNotification("SVG_ICON_DATA", svgContent);
-        } catch (error) {
-            console.error("MMM-My-Actual-Weather: Error reading SVG icon:", error);
-            this.sendSocketNotification("WEATHER_ERROR", `SVG Icon: ${error.message}`);
-        }
     },
 
     // Helper function to convert wind direction (degrees to cardinal direction)

@@ -3,6 +3,7 @@
 // (c) Dr. Ralf Korell, 2025/2026
 // Modified: 2026-01-14, 15:00 - AP 1.3 + 1.4: Added PWS push config parameters, sensor display, timestamp display
 // Modified: 2026-01-15, 14:30 - AP 2: Gradient-Farben cachen, PWS-Verbindungsstatus, Logging auf debug
+// Modified: 2026-01-16, 10:30 - AP 3: Layout vereinfacht (Table statt Flex/Absolute), SVG-Hack durch wi-strong-wind ersetzt
 
 
 
@@ -100,11 +101,9 @@ Module.register("MMM-My-Actual-Weather", {
     // Module initialization
     start: function() {
         this.weatherData = null; // Stores the fetched weather data
-        this.windSvgContent = null; // Property to store SVG content
         this.loaded = false; // Flag if data has been loaded
         this.resolvedGradientPoints = null; // Cached gradient colors (resolved to RGB)
         this.getWeatherData(); // Starts the first data fetch
-        this.getSvgIcon(); // Fetch SVG content on start
         this.scheduleUpdate(); // Schedules recurring updates
         Log.info("Starting module: " + this.name);
     },
@@ -208,129 +207,133 @@ Module.register("MMM-My-Actual-Weather", {
             return wrapper;
         }
 
-        // --- Current Weather Section (mimics default module structure) ---
-        var currentWeatherWrapper = document.createElement("div");
-        currentWeatherWrapper.className = "current-weather-wrapper"; // For relative positioning of wind
+        // --- Table Layout ---
+        var table = document.createElement("table");
+        table.className = "weather-table";
 
-        // Weather Details (Icon and Temperature)
-        var weatherDetails = document.createElement("div");
-        weatherDetails.className = "weather-details";
+        // === Row 1: Icon + (Wind-Info / Temperature) ===
+        var row1 = document.createElement("tr");
 
-        // Weather Icon
-        var iconSpan = document.createElement("span");
-        iconSpan.className = "icon";
+        // Cell 1: Weather Icon (spans 2 rows visually via valign)
+        var iconCell = document.createElement("td");
+        iconCell.className = "icon-cell";
+        iconCell.setAttribute("valign", "top");
         var weatherIcon = document.createElement("span");
-        weatherIcon.className = "wi " + this.weatherData.weatherIconClass;
-        iconSpan.appendChild(weatherIcon);
-        weatherDetails.appendChild(iconSpan);
+        weatherIcon.className = "wi " + this.weatherData.weatherIconClass + " weather-icon";
+        iconCell.appendChild(weatherIcon);
+        row1.appendChild(iconCell);
 
-        // Temperature
-        var temperature = document.createElement("span");
-        temperature.className = "temperature";
-        temperature.innerHTML = this.weatherData.temp.toFixed(this.config.decimalPlacesTemp) + "&deg;";
-        temperature.style.color = this.getTemperatureColor(this.weatherData.temp);
-        weatherDetails.appendChild(temperature);
-
-        currentWeatherWrapper.appendChild(weatherDetails);
+        // Cell 2: Wind-Info + Temperature (stacked)
+        var rightCell1 = document.createElement("td");
+        rightCell1.className = "right-cell";
+        rightCell1.setAttribute("valign", "top");
 
         // Wind Information
         var windInfo = document.createElement("div");
         windInfo.className = "wind-info";
         if (this.weatherData.windSpeed !== null && this.weatherData.windDirection !== null) {
-            // Container for the dynamically loaded SVG
-            var windIconSvgContainer = document.createElement("div");
-            windIconSvgContainer.className = "wind-icon-svg-container";
-            if (this.windSvgContent) {
-                // Inject the SVG string directly into the div
-                windIconSvgContainer.innerHTML = this.windSvgContent;
-            }
-            windInfo.appendChild(windIconSvgContainer);
-            
+            // Wind Icon (Font)
+            var windIcon = document.createElement("span");
+            windIcon.className = "wi wi-strong-wind wind-icon";
+            windInfo.appendChild(windIcon);
+
+            // Wind Speed
             var windSpeed = document.createElement("span");
             windSpeed.className = "wind-speed";
-            
-            let windUnit = "m/s"; // Default from Wunderground PWS if units=s
+            let windUnit = "m/s";
             let displaySpeed = this.weatherData.windSpeed;
-
             if (this.config.units === "m") {
-                displaySpeed = (this.weatherData.windSpeed * 3.6); // Convert m/s to km/h
+                displaySpeed = (this.weatherData.windSpeed * 3.6);
                 windUnit = "km/h";
             } else if (this.config.units === "e" || this.config.units === "h") {
-                // If config.units is 'e' or 'h', node_helper fetches from 'imperial' object, which is mph.
                 windUnit = "mph";
             }
-            // If config.units is 's', node_helper fetches from 'metric' object, which is m/s.
-            // No conversion needed, unit is m/s.
-
             windSpeed.innerHTML = displaySpeed.toFixed(1) + " " + windUnit;
             windInfo.appendChild(windSpeed);
 
+            // Wind Direction
             var windDirection = document.createElement("span");
             windDirection.className = "wind-direction";
-            windDirection.innerHTML = this.weatherData.windDirection;
+            windDirection.innerHTML = " " + this.weatherData.windDirection;
             windInfo.appendChild(windDirection);
         } else {
-            var noWindText = document.createElement("span");
-            noWindText.className = "wind-direction"; // Use this class for styling consistency
-            noWindText.innerHTML = this.translate("NO_WIND_DATA");
-            windInfo.appendChild(noWindText);
+            windInfo.innerHTML = this.translate("NO_WIND_DATA");
         }
-        // Apply wind color to the text elements and the inlined SVG (via inheritance to currentColor)
         windInfo.style.color = this.config.windColor;
-        currentWeatherWrapper.appendChild(windInfo);
+        rightCell1.appendChild(windInfo);
 
-        wrapper.appendChild(currentWeatherWrapper);
+        // Temperature
+        var temperature = document.createElement("div");
+        temperature.className = "temperature";
+        temperature.innerHTML = this.weatherData.temp.toFixed(this.config.decimalPlacesTemp) + "&deg;";
+        temperature.style.color = this.getTemperatureColor(this.weatherData.temp);
+        rightCell1.appendChild(temperature);
 
-        // --- Sensor Section (only when local PWS data available) ---
+        row1.appendChild(rightCell1);
+        table.appendChild(row1);
+
+        // === Row 2: (empty) + (Sensors / Precipitation) ===
+        var row2 = document.createElement("tr");
+
+        // Cell 1: Empty
+        var emptyCell = document.createElement("td");
+        row2.appendChild(emptyCell);
+
+        // Cell 2: Sensors + Precipitation
+        var rightCell2 = document.createElement("td");
+        rightCell2.className = "right-cell";
+
+        // Sensor Section (only when local PWS data available)
         if (this.weatherData.isLocalData) {
             if (this.config.showSensor1 && this.weatherData.temp1 !== null) {
-                var sensor1Info = document.createElement("div");
-                sensor1Info.className = "sensor-info";
-                sensor1Info.innerHTML = this.config.sensor1Name + ": " + this.weatherData.temp1.toFixed(this.config.decimalPlacesTemp) + "&deg;C";
-                sensor1Info.style.color = this.config.sensorTextColor;
-                wrapper.appendChild(sensor1Info);
+                var sensor1 = document.createElement("div");
+                sensor1.className = "sensor-info";
+                sensor1.innerHTML = this.config.sensor1Name + ": " + this.weatherData.temp1.toFixed(this.config.decimalPlacesTemp) + "&deg;C";
+                sensor1.style.color = this.config.sensorTextColor;
+                rightCell2.appendChild(sensor1);
             }
             if (this.config.showSensor2 && this.weatherData.temp2 !== null) {
-                var sensor2Info = document.createElement("div");
-                sensor2Info.className = "sensor-info";
-                sensor2Info.innerHTML = this.config.sensor2Name + ": " + this.weatherData.temp2.toFixed(this.config.decimalPlacesTemp) + "&deg;C";
-                sensor2Info.style.color = this.config.sensorTextColor;
-                wrapper.appendChild(sensor2Info);
+                var sensor2 = document.createElement("div");
+                sensor2.className = "sensor-info";
+                sensor2.innerHTML = this.config.sensor2Name + ": " + this.weatherData.temp2.toFixed(this.config.decimalPlacesTemp) + "&deg;C";
+                sensor2.style.color = this.config.sensorTextColor;
+                rightCell2.appendChild(sensor2);
             }
         } else if (this.weatherData.waitingForPws) {
-            // Show PWS wait status when using API data and still waiting for first push
-            var pwsWaitInfo = document.createElement("div");
-            pwsWaitInfo.className = "sensor-info pws-wait";
-            pwsWaitInfo.innerHTML = this.translate("WAITING_FOR_PWS");
-            pwsWaitInfo.style.color = this.config.sensorTextColor;
-            wrapper.appendChild(pwsWaitInfo);
+            var pwsWait = document.createElement("div");
+            pwsWait.className = "sensor-info pws-wait";
+            pwsWait.innerHTML = this.translate("WAITING_FOR_PWS");
+            pwsWait.style.color = this.config.sensorTextColor;
+            rightCell2.appendChild(pwsWait);
         }
 
-        // --- Precipitation Section (below current weather) ---
-        var precipitationInfo = document.createElement("div");
-        precipitationInfo.className = "precipitation-info";
-
+        // Precipitation
+        var precipDiv = document.createElement("div");
+        precipDiv.className = "precipitation-info";
         var precipitation = document.createElement("span");
-        precipitation.className = "precipitation dimmed";
+        precipitation.className = "precipitation";
         if (this.weatherData.precipTotal !== null) {
             precipitation.innerHTML = this.translate("PRECIPITATION") + ": " + this.weatherData.precipTotal.toFixed(this.config.decimalPlacesPrecip) + " mm";
         } else {
             precipitation.innerHTML = this.translate("NO_PRECIPITATION_DATA");
         }
-        precipitation.style.color = this.config.precipitationColor; // Apply precipitation color
-        precipitationInfo.appendChild(precipitation);
+        precipitation.style.color = this.config.precipitationColor;
+        precipDiv.appendChild(precipitation);
 
-        // Timestamp (only when local PWS data and showDataSource enabled)
+        // Timestamp
         if (this.weatherData.isLocalData && this.config.showDataSource && this.weatherData.timestamp) {
             var timestamp = document.createElement("span");
             timestamp.className = "data-timestamp";
-            timestamp.innerHTML = this.weatherData.timestamp;
+            timestamp.innerHTML = " " + this.weatherData.timestamp;
             timestamp.style.color = this.config.sensorTextColor;
-            precipitationInfo.appendChild(timestamp);
+            precipDiv.appendChild(timestamp);
         }
+        rightCell2.appendChild(precipDiv);
 
-        wrapper.appendChild(precipitationInfo);
+        row2.appendChild(rightCell2);
+        table.appendChild(row2);
 
+        wrapper.appendChild(table);
         return wrapper;
     },
 
@@ -340,11 +343,6 @@ Module.register("MMM-My-Actual-Weather", {
         setInterval(function() {
             self.getWeatherData();
         }, this.config.updateInterval);
-    },
-
-    // Requests SVG icon content from the node_helper
-    getSvgIcon: function() {
-        this.sendSocketNotification("FETCH_SVG_ICON");
     },
 
     // Requests weather data from the node_helper
@@ -371,9 +369,6 @@ Module.register("MMM-My-Actual-Weather", {
             this.loaded = true;
             this.weatherData = null; // Set data to null to display error message
             this.updateDom(this.config.animationSpeed);
-        } else if (notification === "SVG_ICON_DATA") { // New notification handler for SVG content
-            this.windSvgContent = payload;
-            this.updateDom(); // Update DOM once SVG is loaded
         }
     }
 });
