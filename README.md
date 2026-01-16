@@ -1,16 +1,16 @@
 # MMM-My-Actual-Weather
 
-MagicMirror² Modul für aktuelle Wetterdaten von einer eigenen Personal Weather Station (PWS) mit API-Fallback.
+MagicMirror² module for current weather data from your own Personal Weather Station (PWS) with API fallback.
 
 ## Features
 
-- **PWS Push-Empfang**: HTTP-Server empfängt Daten direkt von der Wetterstation (z.B. Ecowitt, Ambient Weather)
-- **API-Fallback**: Automatischer Wechsel zu Wunderground API wenn PWS nicht erreichbar
-- **State Machine**: Saubere Koordination zwischen PWS und API-Datenquellen
-- **Zusatzsensoren**: Unterstützung für bis zu 2 zusätzliche Temperatursensoren
-- **Temperatur-Farbgradient**: Temperaturabhängige Farbdarstellung (konfigurierbar)
-- **Tag/Nacht-Icons**: Automatische Anpassung der Wetter-Icons basierend auf Sonnenauf-/untergang
-- **Mehrsprachig**: Deutsch und Englisch
+- **PWS Push Reception**: HTTP server receives data directly from your weather station (e.g., Ecowitt, Ambient Weather)
+- **API Fallback**: Automatic switch to Wunderground API when PWS is unavailable
+- **State Machine**: Clean coordination between PWS and API data sources
+- **Additional Sensors**: Support for up to 2 additional temperature sensors
+- **Temperature Color Gradient**: Temperature-dependent color display (configurable)
+- **Day/Night Icons**: Automatic weather icon adjustment based on sunrise/sunset
+- **Multilingual**: German and English
 
 ## Screenshot
 
@@ -18,22 +18,22 @@ MagicMirror² Modul für aktuelle Wetterdaten von einer eigenen Personal Weather
 
 ## Layout
 
-Das Modul verwendet ein einfaches 2-Zeilen Table-Layout:
+The module uses a simple 2-row table layout:
 
 ```
 ┌─────────────┬──────────────────────┐
-│   WETTER-   │  Wind-Info           │
-│    ICON     │  TEMPERATUR          │
+│   WEATHER   │  Wind Info           │
+│    ICON     │  TEMPERATURE         │
 ├─────────────┼──────────────────────┤
-│   (leer)    │  Sensor 1            │
+│   (empty)   │  Sensor 1            │
 │             │  Sensor 2            │
-│             │  Niederschlag        │
+│             │  Precipitation       │
 └─────────────┴──────────────────────┘
 ```
 
-- **Zeile 1**: Wetter-Icon (links) neben Wind-Info und Temperatur (rechts)
-- **Zeile 2**: Sensordaten und Niederschlag (rechtsbündig)
-- Wind-Icon: `wi-strong-wind` aus Weather Icons Font
+- **Row 1**: Weather icon (left) next to wind info and temperature (right)
+- **Row 2**: Sensor data and precipitation (right-aligned)
+- Wind icon: `wi-strong-wind` from Weather Icons font
 
 ## Installation
 
@@ -44,73 +44,73 @@ cd MMM-My-Actual-Weather
 npm install
 ```
 
-## Konfiguration
+## Configuration
 
-Füge folgendes zu deiner `config/config.js` hinzu:
+Add the following to your `config/config.js`:
 
 ```javascript
 {
     module: "MMM-My-Actual-Weather",
     position: "top_right",
     config: {
-        // Wunderground API (Pflicht)
-        stationId: "DEINE_STATION_ID",
-        apiKey: "DEIN_API_KEY",
+        // Wunderground API (required)
+        stationId: "YOUR_STATION_ID",
+        apiKey: "YOUR_API_KEY",
 
-        // Standort für Tag/Nacht-Berechnung und Open-Meteo (Pflicht)
+        // Location for day/night calculation and Open-Meteo (required)
         latitude: 50.242,
         longitude: 6.603,
 
-        // PWS Push-Server
-        pwsPushPort: 8000,           // Port für HTTP-Server (0 = deaktiviert)
-        pwsPushInterval: 60,         // Erwartetes Push-Intervall in Sekunden
+        // PWS Push Server
+        pwsPushPort: 8000,           // HTTP server port (0 = disabled)
+        pwsPushInterval: 60,         // Expected push interval in seconds
 
-        // Zusatzsensoren
+        // Additional Sensors
         showSensor1: true,
         showSensor2: true,
-        sensor1Name: "WoZi",
-        sensor2Name: "Therapie"
+        sensor1Name: "Living Room",
+        sensor2Name: "Office"
     }
 }
 ```
 
-## Alle Konfigurationsoptionen
+## All Configuration Options
 
-| Option | Typ | Standard | Beschreibung |
-|--------|-----|----------|--------------|
-| **API-Einstellungen** |
-| `stationId` | String | - | Wunderground Station ID (Pflicht) |
-| `apiKey` | String | - | Wunderground API Key (Pflicht) |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| **API Settings** |
+| `stationId` | String | - | Wunderground Station ID (required) |
+| `apiKey` | String | - | Wunderground API Key (required) |
 | `baseURL` | String | `https://api.weather.com/...` | Wunderground API URL |
 | `openMeteoUrl` | String | `https://api.open-meteo.com/...` | Open-Meteo API URL |
-| `latitude` | Number | `null` | Breitengrad (Pflicht) |
-| `longitude` | Number | `null` | Längengrad (Pflicht) |
-| `units` | String | `"m"` | Einheiten: `"m"` (metrisch), `"e"` (imperial) |
-| `updateInterval` | Number | `300000` | Update-Intervall in ms (5 Min) |
-| **PWS Push-Server** |
-| `pwsPushPort` | Number | `8000` | HTTP-Server Port (0 = deaktiviert) |
-| `pwsPushInterval` | Number | `60` | Erwartetes Push-Intervall (Sekunden) |
-| `pwsPushFallbackTimeout` | Number | `180` | Timeout für API-Fallback (Sekunden) |
-| **Sensoren** |
-| `showSensor1` | Boolean | `false` | Sensor 1 anzeigen |
-| `showSensor2` | Boolean | `false` | Sensor 2 anzeigen |
-| `sensor1Name` | String | `"WoZi"` | Anzeigename Sensor 1 |
-| `sensor2Name` | String | `"Therapie"` | Anzeigename Sensor 2 |
-| `sensorTextColor` | String | `"lightgray"` | Textfarbe für Sensoren |
-| **Darstellung** |
-| `decimalPlacesTemp` | Number | `1` | Dezimalstellen Temperatur |
-| `decimalPlacesPrecip` | Number | `1` | Dezimalstellen Niederschlag |
-| `windColor` | String | `"white"` | Farbe für Windanzeige |
-| `precipitationColor` | String | `"white"` | Farbe für Niederschlag |
-| `temperatureColor` | String | `"white"` | Temperaturfarbe (wenn `tempSensitive: false`) |
-| `tempSensitive` | Boolean | `true` | Temperaturabhängige Farbgebung |
-| `showDataSource` | Boolean | `true` | Zeitstempel bei PWS-Daten anzeigen |
-| `animationSpeed` | Number | `1000` | Animationsgeschwindigkeit (ms) |
-| `lang` | String | `config.language` | Sprache (de/en) |
+| `latitude` | Number | `null` | Latitude (required) |
+| `longitude` | Number | `null` | Longitude (required) |
+| `units` | String | `"m"` | Units: `"m"` (metric), `"e"` (imperial) |
+| `updateInterval` | Number | `300000` | Update interval in ms (5 min) |
+| **PWS Push Server** |
+| `pwsPushPort` | Number | `8000` | HTTP server port (0 = disabled) |
+| `pwsPushInterval` | Number | `60` | Expected push interval (seconds) |
+| `pwsPushFallbackTimeout` | Number | `180` | Timeout for API fallback (seconds) |
+| **Sensors** |
+| `showSensor1` | Boolean | `false` | Show sensor 1 |
+| `showSensor2` | Boolean | `false` | Show sensor 2 |
+| `sensor1Name` | String | `"WoZi"` | Display name for sensor 1 |
+| `sensor2Name` | String | `"Therapie"` | Display name for sensor 2 |
+| `sensorTextColor` | String | `"lightgray"` | Text color for sensors |
+| **Display** |
+| `decimalPlacesTemp` | Number | `1` | Decimal places for temperature |
+| `decimalPlacesPrecip` | Number | `1` | Decimal places for precipitation |
+| `windColor` | String | `"white"` | Color for wind display |
+| `precipitationColor` | String | `"white"` | Color for precipitation |
+| `temperatureColor` | String | `"white"` | Temperature color (when `tempSensitive: false`) |
+| `tempSensitive` | Boolean | `true` | Temperature-dependent coloring |
+| `showDataSource` | Boolean | `true` | Show timestamp for PWS data |
+| `animationSpeed` | Number | `1000` | Animation speed (ms) |
+| `lang` | String | `config.language` | Language (de/en) |
 
-## Temperatur-Farbgradient
+## Temperature Color Gradient
 
-Der Farbgradient kann angepasst werden:
+The color gradient can be customized:
 
 ```javascript
 tempColorGradient: [
@@ -126,54 +126,54 @@ tempColorGradient: [
 ]
 ```
 
-## PWS-Konfiguration
+## PWS Configuration
 
-Die Wetterstation muss so konfiguriert werden, dass sie Daten per HTTP POST an den MagicMirror sendet:
+Configure your weather station to send data via HTTP POST to the MagicMirror:
 
 - **URL**: `http://<MagicMirror-IP>:8000/data/report/`
-- **Methode**: POST
-- **Format**: URL-encoded (Standard für Ecowitt/Wunderground-kompatible Stationen)
+- **Method**: POST
+- **Format**: URL-encoded (standard for Ecowitt/Wunderground-compatible stations)
 
-### Unterstützte Felder
+### Supported Fields
 
-| Feld | Beschreibung |
-|------|--------------|
-| `tempf` | Außentemperatur (°F) |
-| `windspeedmph` | Windgeschwindigkeit (mph) |
-| `winddir` | Windrichtung (Grad) |
-| `dailyrainin` | Tagesniederschlag (inches) |
-| `temp1f` | Sensor 1 Temperatur (°F) |
-| `humidity1` | Sensor 1 Luftfeuchtigkeit (%) |
-| `temp2f` | Sensor 2 Temperatur (°F) |
-| `humidity2` | Sensor 2 Luftfeuchtigkeit (%) |
-| `dateutc` | Zeitstempel |
+| Field | Description |
+|-------|-------------|
+| `tempf` | Outdoor temperature (°F) |
+| `windspeedmph` | Wind speed (mph) |
+| `winddir` | Wind direction (degrees) |
+| `dailyrainin` | Daily precipitation (inches) |
+| `temp1f` | Sensor 1 temperature (°F) |
+| `humidity1` | Sensor 1 humidity (%) |
+| `temp2f` | Sensor 2 temperature (°F) |
+| `humidity2` | Sensor 2 humidity (%) |
+| `dateutc` | Timestamp |
 
 ## State Machine
 
-Das Modul verwendet eine State Machine für die Datenquellen-Koordination:
+The module uses a state machine for data source coordination:
 
 ```
-INITIALIZING → (PWS Push empfangen) → PWS_ACTIVE
-     ↓ (3 Sek Timeout)
-WAITING_FOR_PWS → (PWS Push empfangen) → PWS_ACTIVE
-     ↓ (3x Push-Intervall Timeout)
-API_ONLY → (60 Min Recheck) → INITIALIZING
+INITIALIZING → (PWS push received) → PWS_ACTIVE
+     ↓ (3 sec timeout)
+WAITING_FOR_PWS → (PWS push received) → PWS_ACTIVE
+     ↓ (3x push interval timeout)
+API_ONLY → (60 min recheck) → INITIALIZING
 ```
 
-- **INITIALIZING**: Warten auf ersten PWS-Push (max 3 Sekunden)
-- **PWS_ACTIVE**: PWS liefert Daten, API nur für Icons
-- **WAITING_FOR_PWS**: API-Daten anzeigen, auf PWS warten
-- **API_ONLY**: Nur API-Daten, periodischer Recheck
+- **INITIALIZING**: Waiting for first PWS push (max 3 seconds)
+- **PWS_ACTIVE**: PWS delivers data, API only for icons
+- **WAITING_FOR_PWS**: Display API data, wait for PWS
+- **API_ONLY**: API data only, periodic recheck
 
-## Abhängigkeiten
+## Dependencies
 
-- `node-fetch` - HTTP-Requests
-- `suncalc` - Sonnenauf-/untergangsberechnung
+- `node-fetch` - HTTP requests
+- `suncalc` - Sunrise/sunset calculation
 
-## Autor
+## Author
 
 Dr. Ralf Korell, 2025/2026
 
-## Lizenz
+## License
 
 MIT
