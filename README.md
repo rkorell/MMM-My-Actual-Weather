@@ -16,6 +16,25 @@ MagicMirror² Modul für aktuelle Wetterdaten von einer eigenen Personal Weather
 
 ![MMM-My-Actual-Weather](img/MyActualWeather.png)
 
+## Layout
+
+Das Modul verwendet ein einfaches 2-Zeilen Table-Layout:
+
+```
+┌─────────────┬──────────────────────┐
+│   WETTER-   │  Wind-Info           │
+│    ICON     │  TEMPERATUR          │
+├─────────────┼──────────────────────┤
+│   (leer)    │  Sensor 1            │
+│             │  Sensor 2            │
+│             │  Niederschlag        │
+└─────────────┴──────────────────────┘
+```
+
+- **Zeile 1**: Wetter-Icon (links) neben Wind-Info und Temperatur (rechts)
+- **Zeile 2**: Sensordaten und Niederschlag (rechtsbündig)
+- Wind-Icon: `wi-strong-wind` aus Weather Icons Font
+
 ## Installation
 
 ```bash
