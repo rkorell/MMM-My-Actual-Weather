@@ -4,6 +4,7 @@
 // Modified: 2026-01-14, 15:00 - AP 1.3 + 1.4: Added PWS push config parameters, sensor display, timestamp display
 // Modified: 2026-01-15, 14:30 - AP 2: Gradient-Farben cachen, PWS-Verbindungsstatus, Logging auf debug
 // Modified: 2026-01-16, 10:30 - AP 3: Layout vereinfacht (Table statt Flex/Absolute), SVG-Hack durch wi-strong-wind ersetzt
+// Modified: 2026-01-18, 11:00 - AP 4: Added weatherProvider config option (openmeteo/wunderground)
 
 
 
@@ -53,8 +54,12 @@ Module.register("MMM-My-Actual-Weather", {
         stationId: "Your_StationID", // REPLACE THIS WITH YOUR WUNDERGROUND STATION ID
         apiKey: "to_be_replaced_with_your_key", // REPLACE THIS WITH YOUR WUNDERGROUND API KEY
         openMeteoUrl: "https://api.open-meteo.com/v1/forecast",
-        latitude: null, // Must be set in config.js for Open-Meteo and day/night calculation
-        longitude: null, // Must be set in config.js for Open-Meteo and day/night calculation
+        latitude: null, // Must be set in config.js for weather icon and day/night calculation
+        longitude: null, // Must be set in config.js for weather icon and day/night calculation
+
+        // Weather Icon Provider
+        weatherProvider: "openmeteo", // "openmeteo" or "wunderground"
+        wundergroundIconApiKey: null, // Optional separate API key for WUnderground weather icons (uses apiKey if not set)
         updateInterval: 5 * 60 * 1000, // Update interval in milliseconds (5 minutes)
         animationSpeed: 1000, // Animation speed in milliseconds
         lang: config.language, // Language from MagicMirror configuration
@@ -349,12 +354,12 @@ Module.register("MMM-My-Actual-Weather", {
     getWeatherData: function() {
         // Check if latitude and longitude are configured
         if (this.config.latitude === null || this.config.longitude === null) {
-            Log.error(this.name + ": Latitude and Longitude must be set in config.js for Open-Meteo and day/night calculation.");
+            Log.error(this.name + ": Latitude and Longitude must be set in config.js for weather icon provider.");
             this.loaded = true;
             this.updateDom();
             return;
         }
-        // Send the full config to the node_helper, including lat/lon for suncalc
+        // Send the full config to the node_helper
         this.sendSocketNotification("FETCH_WEATHER", this.config);
     },
 

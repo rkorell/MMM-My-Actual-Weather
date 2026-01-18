@@ -6,11 +6,103 @@
 // Modified: 2026-01-15, 16:15 - AP 2: State Machine für saubere PWS/API Koordination
 // Modified: 2026-01-15, 17:00 - AP 2: Bug-Fixes: API-Daten bei WAITING_FOR_PWS/API_ONLY senden und aktualisieren
 // Modified: 2026-01-16, 10:30 - AP 3: SVG-Hack entfernt (Wind-Icon jetzt via Font)
+// Modified: 2026-01-18, 11:00 - AP 4: Dual weather provider support (WUnderground/OpenMeteo), SunCalc removed, lookup tables
 
 const NodeHelper = require("node_helper");
 const fetch = require("node-fetch"); // For API requests
-const SunCalc = require("suncalc"); // For sunrise/sunset calculations
 const http = require("http"); // For PWS push server
+
+// ==================== WEATHER ICON LOOKUP TABLES ====================
+
+// Open-Meteo WMO Weather Codes → weather-icons class mapping
+// https://www.open-meteo.com/en/docs#weathervariables
+// Day/night variants: [day, night]
+const OpenMeteoToWi = {
+    0:  ["wi-day-sunny", "wi-night-clear"],              // Clear sky
+    1:  ["wi-day-sunny-overcast", "wi-night-partly-cloudy"], // Mainly clear
+    2:  ["wi-day-cloudy", "wi-night-cloudy"],            // Partly cloudy
+    3:  ["wi-day-cloudy-high", "wi-night-cloudy-high"],  // Overcast
+    45: ["wi-day-fog", "wi-night-fog"],                  // Fog
+    48: ["wi-freezing-fog", "wi-freezing-fog-night"],    // Depositing rime fog
+    51: ["wi-drizzle", "wi-drizzle-night"],              // Light drizzle
+    53: ["wi-heavy-drizzle", "wi-heavy-drizzle-night"],  // Moderate drizzle
+    55: ["wi-heavy-freezing-drizzle", "wi-heavy-freezing-drizzle-night"], // Dense drizzle
+    56: ["wi-freezing-drizzle", "wi-freezing-drizzle-night"], // Light freezing drizzle
+    57: ["wi-heavy-freezing-drizzle", "wi-heavy-freezing-drizzle-night"], // Dense freezing drizzle
+    61: ["wi-day-rain-mix", "wi-night-rain-mix"],        // Slight rain
+    63: ["wi-day-rain", "wi-night-rain"],                // Moderate rain
+    65: ["wi-extreme-rain", "wi-extreme-rain-night"],    // Heavy rain
+    66: ["wi-freezing-rain", "wi-freezing-rain-night"],  // Light freezing rain
+    67: ["wi-freezing-rain", "wi-freezing-rain-night"],  // Heavy freezing rain
+    71: ["wi-day-snow", "wi-night-snow"],                // Slight snow
+    73: ["wi-day-snow", "wi-night-snow"],                // Moderate snow
+    75: ["wi-day-snow-wind", "wi-night-snow-wind"],      // Heavy snow
+    77: ["wi-day-snow", "wi-night-snow"],                // Snow grains
+    80: ["wi-day-showers", "wi-night-showers"],          // Slight rain showers
+    81: ["wi-day-storm-showers", "wi-night-storm-showers"], // Moderate rain showers
+    82: ["wi-extreme-rain", "wi-extreme-rain-night"],    // Violent rain showers
+    85: ["wi-day-snow", "wi-night-snow"],                // Slight snow showers
+    86: ["wi-day-snow-wind", "wi-night-snow-wind"],      // Heavy snow showers
+    95: ["wi-day-thunderstorm", "wi-night-thunderstorm"], // Thunderstorm
+    96: ["wi-thunderstorms-with-hail", "wi-thunderstorms-with-hail-night"], // Thunderstorm with slight hail
+    99: ["wi-thunderstorms-with-hail", "wi-thunderstorms-with-hail-night"]  // Thunderstorm with heavy hail
+};
+
+// Weather Underground (TWC) iconCode → weather-icons class mapping
+// https://weather.com/swagger-docs/ui/sun/v3/sunV3CurrentsOnDemand.json
+// Some codes are inherently day (D) or night (N), others need dayOrNight from API
+// Format: { icon: "wi-class", daySpecific: true/false }
+// If daySpecific is false, we'll use dayOrNight from API to pick day/night variant
+const WUndergroundToWi = {
+    0:  { icon: "wi-tornado", daySpecific: false },                    // Tornado
+    1:  { icon: "wi-tropical-storm", daySpecific: false },             // Tropical Storm
+    2:  { icon: "wi-tropical-storm", daySpecific: false },             // Hurricane
+    3:  { icon: "wi-thunderstorm", daySpecific: false },               // Strong Storms
+    4:  { icon: "wi-thunderstorms-with-hail", daySpecific: false },    // Thunder and Hail
+    5:  { icon: "wi-day-rain-mix", nightIcon: "wi-night-rain-mix", daySpecific: false }, // Rain to Snow Showers
+    6:  { icon: "wi-day-sleet", nightIcon: "wi-night-sleet", daySpecific: false }, // Rain/Sleet
+    7:  { icon: "wi-day-sleet", nightIcon: "wi-night-sleet", daySpecific: false }, // Wintry Mix
+    8:  { icon: "wi-freezing-drizzle", nightIcon: "wi-freezing-drizzle-night", daySpecific: false }, // Freezing Drizzle
+    9:  { icon: "wi-drizzle", nightIcon: "wi-drizzle-night", daySpecific: false }, // Drizzle
+    10: { icon: "wi-freezing-rain", nightIcon: "wi-freezing-rain-night", daySpecific: false }, // Freezing Rain
+    11: { icon: "wi-showers", nightIcon: "wi-showers-night", daySpecific: false }, // Showers
+    12: { icon: "wi-day-rain", nightIcon: "wi-night-rain", daySpecific: false }, // Rain
+    13: { icon: "wi-day-snow", nightIcon: "wi-night-snow", daySpecific: false }, // Flurries
+    14: { icon: "wi-day-snow", nightIcon: "wi-night-snow", daySpecific: false }, // Snow Showers
+    15: { icon: "wi-day-snow-wind", nightIcon: "wi-night-snow-wind", daySpecific: false }, // Blowing/Drifting Snow
+    16: { icon: "wi-snow", nightIcon: "wi-snow-night", daySpecific: false }, // Snow
+    17: { icon: "wi-day-hail", nightIcon: "wi-night-hail", daySpecific: false }, // Hail
+    18: { icon: "wi-sleet", nightIcon: "wi-sleet-night", daySpecific: false }, // Sleet
+    19: { icon: "wi-dust", nightIcon: "wi-dust-night", daySpecific: false }, // Blowing Dust/Sandstorm
+    20: { icon: "wi-fog", nightIcon: "wi-fog-night", daySpecific: false }, // Foggy
+    21: { icon: "wi-day-haze", nightIcon: "wi-mist-night", daySpecific: false }, // Haze
+    22: { icon: "wi-day-haze", nightIcon: "wi-mist-night", daySpecific: false }, // Smoke
+    23: { icon: "wi-day-windy", nightIcon: "wi-night-windy", daySpecific: false }, // Breezy
+    24: { icon: "wi-day-windy", nightIcon: "wi-night-windy", daySpecific: false }, // Windy
+    25: { icon: "wi-cold", nightIcon: "wi-cold-night", daySpecific: false }, // Frigid/Ice Crystals
+    26: { icon: "wi-cloudy", nightIcon: "wi-cloudy-night", daySpecific: false }, // Cloudy
+    27: { icon: "wi-night-cloudy", daySpecific: true },                // Mostly Cloudy Night
+    28: { icon: "wi-day-cloudy", daySpecific: true },                  // Mostly Cloudy Day
+    29: { icon: "wi-night-partly-cloudy", daySpecific: true },         // Partly Cloudy Night
+    30: { icon: "wi-day-sunny-overcast", daySpecific: true },          // Partly Cloudy Day
+    31: { icon: "wi-night-clear", daySpecific: true },                 // Clear Night
+    32: { icon: "wi-day-sunny", daySpecific: true },                   // Sunny
+    33: { icon: "wi-night-clear", daySpecific: true },                 // Fair Night
+    34: { icon: "wi-day-sunny", daySpecific: true },                   // Fair Day
+    35: { icon: "wi-thunderstorms-with-hail", nightIcon: "wi-thunderstorms-with-hail-night", daySpecific: false }, // Mixed Rain and Hail
+    36: { icon: "wi-hot", nightIcon: "wi-hot-night", daySpecific: false }, // Hot
+    37: { icon: "wi-day-thunderstorm", nightIcon: "wi-night-thunderstorm", daySpecific: false }, // Isolated Thunderstorms
+    38: { icon: "wi-day-thunderstorm", nightIcon: "wi-night-thunderstorm", daySpecific: false }, // Scattered Thunderstorms
+    39: { icon: "wi-day-showers", daySpecific: true },                 // Scattered Showers Day
+    40: { icon: "wi-extreme-rain", nightIcon: "wi-extreme-rain-night", daySpecific: false }, // Heavy Rain
+    41: { icon: "wi-day-snow", daySpecific: true },                    // Scattered Snow Showers Day
+    42: { icon: "wi-extreme-snow", nightIcon: "wi-extreme-snow-night", daySpecific: false }, // Heavy Snow
+    43: { icon: "wi-blizzard", nightIcon: "wi-blizzard-night", daySpecific: false }, // Blizzard
+    44: { icon: "wi-na", daySpecific: true },                          // Not Available
+    45: { icon: "wi-night-showers", daySpecific: true },               // Scattered Showers Night
+    46: { icon: "wi-night-snow", daySpecific: true },                  // Scattered Snow Showers Night
+    47: { icon: "wi-night-thunderstorm", daySpecific: true }           // Scattered Thunderstorms Night
+};
 
 module.exports = NodeHelper.create({
     start: function() {
@@ -26,9 +118,9 @@ module.exports = NodeHelper.create({
         this.pwsServerStarted = false; // Flag to prevent multiple server starts
         this.httpServer = null; // Reference to HTTP server
 
-        // Open-Meteo Caching
-        this.lastOpenMeteoFetch = null; // Timestamp of last Open-Meteo fetch
-        this.cachedOpenMeteoData = null; // Cached weather icon data
+        // Weather Icon Caching (provider-agnostic)
+        this.lastWeatherIconFetch = null; // Timestamp of last weather icon fetch
+        this.cachedWeatherIconData = null; // Cached weather icon data { iconClass, weatherCode, isDay }
 
         // State Machine
         // States: INITIALIZING | PWS_ACTIVE | WAITING_FOR_PWS | API_ONLY
@@ -58,8 +150,8 @@ module.exports = NodeHelper.create({
                 // Initialize State Machine
                 this.initializeStateMachine();
             } else if (this.state === "PWS_ACTIVE") {
-                // PWS active - just refresh Open-Meteo cache (PWS push will send data)
-                this.refreshOpenMeteoCache();
+                // PWS active - just refresh weather icon cache (PWS push will send data)
+                this.refreshWeatherIconCache();
             } else if (this.state === "WAITING_FOR_PWS" || this.state === "API_ONLY") {
                 // API mode - reload API data and send to frontend (Bug 2 fix)
                 this.loadApiDataInBackground();
@@ -232,8 +324,8 @@ module.exports = NodeHelper.create({
             console.error("MMM-My-Actual-Weather: Error loading API data in background:", error.message);
         }
 
-        // Also load Open-Meteo
-        await this.refreshOpenMeteoCache();
+        // Also load weather icon data
+        await this.refreshWeatherIconCache();
 
         // If in WAITING_FOR_PWS or API_ONLY, send data now (Bug 1 fix)
         if (this.state === "WAITING_FOR_PWS" || this.state === "API_ONLY") {
@@ -242,32 +334,123 @@ module.exports = NodeHelper.create({
         }
     },
 
-    // Refresh Open-Meteo cache
-    refreshOpenMeteoCache: async function() {
+    // ==================== WEATHER ICON PROVIDERS ====================
+
+    // Refresh weather icon cache from configured provider
+    refreshWeatherIconCache: async function() {
         if (!this.configData) return;
 
         const config = this.configData;
         const currentTime = Date.now();
+        const timestamp = new Date().toISOString();
 
         // Only refresh if cache is expired
-        if (this.lastOpenMeteoFetch !== null &&
-            this.cachedOpenMeteoData !== null &&
-            (currentTime - this.lastOpenMeteoFetch) < config.updateInterval) {
+        if (this.lastWeatherIconFetch !== null &&
+            this.cachedWeatherIconData !== null &&
+            (currentTime - this.lastWeatherIconFetch) < config.updateInterval) {
+            console.log(`MMM-My-Actual-Weather [${timestamp}]: Cache still valid, age=${Math.round((currentTime - this.lastWeatherIconFetch)/1000)}s, interval=${config.updateInterval/1000}s`);
             return; // Cache still valid
         }
 
+        const provider = config.weatherProvider || "openmeteo";
+        console.log(`MMM-My-Actual-Weather [${timestamp}]: Fetching weather icon from ${provider} (cache expired or empty)`);
+
+        if (provider === "wunderground") {
+            await this.fetchWUndergroundWeatherIcon(config, timestamp);
+        } else {
+            await this.fetchOpenMeteoWeatherIcon(config, timestamp);
+        }
+    },
+
+    // Fetch weather icon data from Open-Meteo
+    fetchOpenMeteoWeatherIcon: async function(config, timestamp) {
         const openMeteoUrl = `${config.openMeteoUrl}?latitude=${config.latitude}&longitude=${config.longitude}&current_weather=true&forecast_days=1`;
         try {
             const response = await fetch(openMeteoUrl);
             if (response.ok) {
                 const data = await response.json();
                 if (data.current_weather && data.current_weather.weathercode !== undefined) {
-                    this.cachedOpenMeteoData = { weatherCode: data.current_weather.weathercode };
-                    this.lastOpenMeteoFetch = currentTime;
+                    const oldCode = this.cachedWeatherIconData ? this.cachedWeatherIconData.weatherCode : 'none';
+                    const weatherCode = data.current_weather.weathercode;
+                    // Open-Meteo provides is_day (1=day, 0=night)
+                    const isDay = data.current_weather.is_day === 1;
+                    const iconClass = this.getWeatherIconOpenMeteo(weatherCode, isDay);
+
+                    this.cachedWeatherIconData = {
+                        weatherCode: weatherCode,
+                        isDay: isDay,
+                        iconClass: iconClass
+                    };
+                    this.lastWeatherIconFetch = Date.now();
+
+                    console.log(`MMM-My-Actual-Weather [${timestamp}]: Open-Meteo fetched, weatherCode: ${oldCode} → ${weatherCode}, isDay: ${isDay}, iconClass: ${iconClass}`);
                 }
+            } else {
+                console.log(`MMM-My-Actual-Weather [${timestamp}]: Open-Meteo fetch failed, status=${response.status}`);
             }
         } catch (error) {
-            console.error("MMM-My-Actual-Weather: Error refreshing Open-Meteo cache:", error.message);
+            console.error(`MMM-My-Actual-Weather [${timestamp}]: Error fetching Open-Meteo:`, error.message);
+        }
+    },
+
+    // Fetch weather icon data from Weather Underground
+    fetchWUndergroundWeatherIcon: async function(config, timestamp) {
+        // Weather Underground current conditions API (same as weather.com v3 API)
+        const wuIconUrl = `https://api.weather.com/v3/wx/observations/current?geocode=${config.latitude},${config.longitude}&format=json&units=m&language=${config.lang || 'de'}-DE&apiKey=${config.wundergroundIconApiKey || config.apiKey}`;
+        try {
+            const response = await fetch(wuIconUrl);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.iconCode !== undefined) {
+                    const oldCode = this.cachedWeatherIconData ? this.cachedWeatherIconData.weatherCode : 'none';
+                    const iconCode = data.iconCode;
+                    // WUnderground provides dayOrNight ("D" or "N")
+                    const isDay = data.dayOrNight === "D";
+                    const iconClass = this.getWeatherIconWUnderground(iconCode, isDay);
+
+                    this.cachedWeatherIconData = {
+                        weatherCode: iconCode,
+                        isDay: isDay,
+                        iconClass: iconClass
+                    };
+                    this.lastWeatherIconFetch = Date.now();
+
+                    console.log(`MMM-My-Actual-Weather [${timestamp}]: WUnderground fetched, iconCode: ${oldCode} → ${iconCode}, isDay: ${isDay}, iconClass: ${iconClass}`);
+                }
+            } else {
+                console.log(`MMM-My-Actual-Weather [${timestamp}]: WUnderground fetch failed, status=${response.status}`);
+            }
+        } catch (error) {
+            console.error(`MMM-My-Actual-Weather [${timestamp}]: Error fetching WUnderground:`, error.message);
+        }
+    },
+
+    // Get weather icon class from Open-Meteo weather code
+    getWeatherIconOpenMeteo: function(weatherCode, isDay) {
+        const mapping = OpenMeteoToWi[weatherCode];
+        if (mapping) {
+            return isDay ? mapping[0] : mapping[1];
+        }
+        return "wi-na";
+    },
+
+    // Get weather icon class from Weather Underground icon code
+    getWeatherIconWUnderground: function(iconCode, isDay) {
+        const mapping = WUndergroundToWi[iconCode];
+        if (!mapping) {
+            return "wi-na";
+        }
+
+        // If this icon code is day-specific (already includes day/night in the code), use it directly
+        if (mapping.daySpecific) {
+            return mapping.icon;
+        }
+
+        // Otherwise, pick day or night variant based on API's dayOrNight
+        if (isDay) {
+            return mapping.icon;
+        } else {
+            return mapping.nightIcon || mapping.icon;
         }
     },
 
@@ -315,27 +498,23 @@ module.exports = NodeHelper.create({
             return;
         }
 
-        // Calculate day/night
-        let isDay = true;
-        if (config.latitude !== null && config.longitude !== null) {
-            const now = new Date();
-            const times = SunCalc.getTimes(now, config.latitude, config.longitude);
-            isDay = now > times.sunrise && now < times.sunset;
-        }
-        weatherData.isDay = isDay;
-
         // Add weather icon from cache (or fetch if needed)
-        if (this.cachedOpenMeteoData !== null) {
-            weatherData.weatherCode = this.cachedOpenMeteoData.weatherCode;
-            weatherData.weatherIconClass = this.getWeatherIcon(this.cachedOpenMeteoData.weatherCode, isDay);
+        if (this.cachedWeatherIconData !== null) {
+            weatherData.weatherCode = this.cachedWeatherIconData.weatherCode;
+            weatherData.isDay = this.cachedWeatherIconData.isDay;
+            weatherData.weatherIconClass = this.cachedWeatherIconData.iconClass;
+            const provider = config.weatherProvider || "openmeteo";
+            console.log(`MMM-My-Actual-Weather DEBUG: provider=${provider}, weatherCode=${this.cachedWeatherIconData.weatherCode}, isDay=${this.cachedWeatherIconData.isDay}, iconClass=${weatherData.weatherIconClass}`);
         } else {
-            // Try to fetch Open-Meteo now
-            await this.refreshOpenMeteoCache();
-            if (this.cachedOpenMeteoData !== null) {
-                weatherData.weatherCode = this.cachedOpenMeteoData.weatherCode;
-                weatherData.weatherIconClass = this.getWeatherIcon(this.cachedOpenMeteoData.weatherCode, isDay);
+            // Try to fetch weather icon now
+            await this.refreshWeatherIconCache();
+            if (this.cachedWeatherIconData !== null) {
+                weatherData.weatherCode = this.cachedWeatherIconData.weatherCode;
+                weatherData.isDay = this.cachedWeatherIconData.isDay;
+                weatherData.weatherIconClass = this.cachedWeatherIconData.iconClass;
             } else {
                 weatherData.weatherCode = null;
+                weatherData.isDay = true;
                 weatherData.weatherIconClass = "wi-na";
             }
         }
@@ -475,84 +654,5 @@ module.exports = NodeHelper.create({
         const normalizedDegree = (degree % 360 + 360) % 360;
         const index = Math.round(normalizedDegree / (360 / directions.length)) % directions.length;
         return directions[index];
-    },
-
-    // Helper function to convert Open-Meteo Weather Code to a weather-icon class
-    // This mapping uses the weather-icons classes from your custom.css reference.
-    getWeatherIcon: function(weatherCode, isDay) {
-        // Open-Meteo Weather Codes: https://www.open-meteo.com/en/docs/forecast-api#weathercodes
-        // Prioritize day/night specific icons if available in your custom.css reference
-        switch (weatherCode) {
-            case 0:  // Clear sky
-                return isDay ? "wi-day-sunny" : "wi-night-clear";
-            case 1:  // Mainly clear
-                return isDay ? "wi-day-sunny-overcast" : "wi-night-partly-cloudy";
-            case 2:  // Partly cloudy
-                return isDay ? "wi-day-cloudy" : "wi-night-cloudy";
-            case 3:  // Overcast
-                return isDay ? "wi-day-cloudy-high" : "wi-night-cloudy-high";
-            case 45: // Fog
-                return isDay ? "wi-day-fog" : "wi-night-fog";
-            case 48: // Depositing rime fog
-                return isDay ? "wi-freezing-fog" : "wi-freezing-fog-night";
-
-            // --- Drizzle ---
-            case 51: // Light drizzle
-                return isDay ? "wi-drizzle" : "wi-drizzle-night";
-            case 53: // Moderate drizzle
-                return isDay ? "wi-heavy-drizzle" : "wi-heavy-drizzle-night";
-            case 55: // Dense drizzle
-                return isDay ? "wi-heavy-freezing-drizzle" : "wi-heavy-freezing-drizzle-night";
-            case 56: // Freezing drizzle light
-                return isDay ? "wi-freezing-drizzle" : "wi-freezing-drizzle-night";
-            case 57: // Freezing drizzle dense
-                return isDay ? "wi-heavy-freezing-drizzle" : "wi-heavy-freezing-drizzle-night";
-
-            // --- Rain ---
-            case 61: // Rain: Slight
-                return isDay ? "wi-day-rain-mix" : "wi-night-rain-mix";
-            case 63: // Rain: Moderate
-                return isDay ? "wi-day-rain" : "wi-night-rain";
-            case 65: // Rain: Heavy
-                return isDay ? "wi-day-extreme-rain-showers" : "wi-night-extreme-rain-showers";
-            case 66: // Freezing Rain: Light
-                return isDay ? "wi-freezing-rain" : "wi-freezing-rain-night";
-            case 67: // Freezing Rain: Heavy
-                return isDay ? "wi-heavy-freezing-drizzle" : "wi-heavy-freezing-drizzle-night";
-
-            // --- Snow ---
-            case 71: // Snow: Slight
-                return isDay ? "wi-day-snow" : "wi-night-snow";
-            case 73: // Snow: Moderate
-                return isDay ? "wi-day-snow" : "wi-night-snow";
-            case 75: // Snow: Heavy
-                return isDay ? "wi-day-snow-wind" : "wi-night-snow-wind";
-            case 77: // Snow grains
-                return isDay ? "wi-day-snow" : "wi-night-snow";
-
-            // --- Showers ---
-            case 80: // Rain showers: Slight
-                return isDay ? "wi-day-showers" : "wi-night-showers";
-            case 81: // Rain showers: Moderate
-                return isDay ? "wi-day-storm-showers" : "wi-night-storm-showers";
-            case 82: // Rain showers: Violent
-                return isDay ? "wi-day-extreme-rain-showers" : "wi-night-extreme-rain-showers";
-
-            case 85: // Snow showers: Slight
-                return isDay ? "wi-day-snow" : "wi-night-snow";
-            case 86: // Snow showers: Heavy
-                return isDay ? "wi-day-snow-wind" : "wi-night-snow-wind";
-
-            // --- Thunderstorms ---
-            case 95: // Thunderstorm: Slight or moderate
-                return isDay ? "wi-day-thunderstorm" : "wi-night-thunderstorm";
-            case 96: // Thunderstorm with slight hail
-                return isDay ? "wi-day-hail" : "wi-night-hail";
-            case 99: // Thunderstorm with heavy hail
-                return isDay ? "wi-day-hail" : "wi-night-hail";
-
-            default:
-                return "wi-na";
-        }
     }
 });
