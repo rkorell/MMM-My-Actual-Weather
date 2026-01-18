@@ -591,7 +591,7 @@ module.exports = NodeHelper.create({
             // Sensor 2 (Fahrenheit → Celsius)
             temp2: data.temp2f ? this.fahrenheitToCelsius(parseFloat(data.temp2f)) : null,
             humidity2: data.humidity2 ? parseInt(data.humidity2) : null,
-            // Timestamp from PWS (dateutc format: "2026-01-14+11:58:20")
+            // Timestamp from PWS (dateutc arrives as "2026-01-14 11:58:20" after URL decoding)
             timestamp: data.dateutc ? this.parsePwsTimestamp(data.dateutc) : null,
             // Mark as local data
             isLocalData: true
@@ -612,7 +612,8 @@ module.exports = NodeHelper.create({
 
     // Parse PWS timestamp and extract time portion
     parsePwsTimestamp: function(dateutc) {
-        // Format: "2026-01-14+11:58:20" → extract "11:58"
+        // PWS sends: "2026-01-14+11:58:20" but URLSearchParams decodes + to space
+        // So we receive: "2026-01-14 11:58:20" → extract "11:58"
         if (!dateutc) return null;
         const parts = dateutc.split(" ");
         if (parts.length === 2) {
