@@ -61,6 +61,10 @@ Add the following to your `config/config.js`:
         latitude: 50.242,
         longitude: 6.603,
 
+        // Weather Icon Provider
+        weatherProvider: "wunderground",      // "openmeteo" or "wunderground"
+        wundergroundIconApiKey: "YOUR_KEY",   // Optional: separate key for v3 API
+
         // PWS Push Server
         pwsPushPort: 8000,           // HTTP server port (0 = disabled)
         pwsPushInterval: 60,         // Expected push interval in seconds
@@ -69,7 +73,25 @@ Add the following to your `config/config.js`:
         showSensor1: true,
         showSensor2: true,
         sensor1Name: "Living Room",
-        sensor2Name: "Office"
+        sensor2Name: "Office",
+
+        // Temperature Color Gradient
+        tempColorGradient: [
+            { temp: -20, color: "#b05899" },
+            { temp: -14, color: "#6a4490" },
+            { temp: -10, color: "#544691" },
+            { temp: -5, color: "#484894" },
+            { temp: -1, color: "#547bbb" },
+            { temp: 4, color: "#70bbe8" },
+            { temp: 8, color: "#c2ce2c" },
+            { temp: 12, color: "#ecc82d" },
+            { temp: 16, color: "#eebf2e" },
+            { temp: 20, color: "#eec12c" },
+            { temp: 24, color: "#e2a657" },
+            { temp: 27, color: "#db8f32" },
+            { temp: 30, color: "#bb5a20" },
+            { temp: 32, color: "#c04117" }
+        ]
     }
 }
 ```
@@ -113,19 +135,24 @@ Add the following to your `config/config.js`:
 
 ## Temperature Color Gradient
 
-The color gradient can be customized:
+The color gradient can be customized. Colors are interpolated between defined points:
 
 ```javascript
 tempColorGradient: [
-    { temp: -17, color: "Dodgerblue" },
-    { temp: -8, color: "Blue" },
-    { temp: 2, color: "LightBlue" },
-    { temp: 8, color: "Yellow" },
-    { temp: 15, color: "Gold" },
-    { temp: 18, color: "Orange" },
-    { temp: 25, color: "Darkorange" },
-    { temp: 28, color: "Orangered" },
-    { temp: 32, color: "Red" }
+    { temp: -20, color: "#b05899" },
+    { temp: -14, color: "#6a4490" },
+    { temp: -10, color: "#544691" },
+    { temp: -5, color: "#484894" },
+    { temp: -1, color: "#547bbb" },
+    { temp: 4, color: "#70bbe8" },
+    { temp: 8, color: "#c2ce2c" },
+    { temp: 12, color: "#ecc82d" },
+    { temp: 16, color: "#eebf2e" },
+    { temp: 20, color: "#eec12c" },
+    { temp: 24, color: "#e2a657" },
+    { temp: 27, color: "#db8f32" },
+    { temp: 30, color: "#bb5a20" },
+    { temp: 32, color: "#c04117" }
 ]
 ```
 
