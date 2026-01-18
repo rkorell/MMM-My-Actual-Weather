@@ -183,17 +183,27 @@ Configure your weather station to send data via HTTP POST to the MagicMirror:
 The module uses a state machine for data source coordination:
 
 ```
-INITIALIZING → (PWS push received) → PWS_ACTIVE
-     ↓ (3 sec timeout)
-WAITING_FOR_PWS → (PWS push received) → PWS_ACTIVE
-     ↓ (3x push interval timeout)
-API_ONLY → (60 min recheck) → INITIALIZING
+                         ┌─────────────────────────────────────┐
+                         │  PWS push received (from any state) │
+                         └──────────────────┬──────────────────┘
+                                            ▼
+┌──────────────┐  3 sec    ┌─────────────────────┐  3x interval  ┌──────────────┐
+│ INITIALIZING │ ────────► │   WAITING_FOR_PWS   │ ────────────► │   API_ONLY   │
+└──────────────┘  timeout  └─────────────────────┘    timeout    └──────────────┘
+                                    ▲                                   │
+                                    │ 3x interval timeout               │ 60 min
+                                    │                                   │ recheck
+                           ┌────────┴───────┐                           │
+                           │   PWS_ACTIVE   │ ◄─────────────────────────┘
+                           └────────────────┘
 ```
 
 - **INITIALIZING**: Waiting for first PWS push (max 3 seconds)
-- **PWS_ACTIVE**: PWS delivers data, API only for icons
-- **WAITING_FOR_PWS**: Display API data, wait for PWS
-- **API_ONLY**: API data only, periodic recheck
+- **PWS_ACTIVE**: PWS delivers data, API only for weather icons
+- **WAITING_FOR_PWS**: Display API data, waiting for PWS to respond
+- **API_ONLY**: API data only, recheck for PWS every 60 minutes
+
+**Note**: PWS push reception transitions to PWS_ACTIVE from any state.
 
 ## Dependencies
 
