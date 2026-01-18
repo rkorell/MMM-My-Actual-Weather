@@ -57,7 +57,7 @@ Add the following to your `config/config.js`:
         stationId: "YOUR_STATION_ID",
         apiKey: "YOUR_API_KEY",
 
-        // Location for day/night calculation and Open-Meteo (required)
+        // Location for weather icon provider (required)
         latitude: 50.242,
         longitude: 6.603,
 
@@ -87,6 +87,9 @@ Add the following to your `config/config.js`:
 | `longitude` | Number | `null` | Longitude (required) |
 | `units` | String | `"m"` | Units: `"m"` (metric), `"e"` (imperial) |
 | `updateInterval` | Number | `300000` | Update interval in ms (5 min) |
+| **Weather Icon Provider** |
+| `weatherProvider` | String | `"openmeteo"` | Icon provider: `"openmeteo"` or `"wunderground"` |
+| `wundergroundIconApiKey` | String | `null` | Separate API key for WUnderground icons (uses `apiKey` if not set) |
 | **PWS Push Server** |
 | `pwsPushPort` | Number | `8000` | HTTP server port (0 = disabled) |
 | `pwsPushInterval` | Number | `60` | Expected push interval (seconds) |
@@ -168,7 +171,49 @@ API_ONLY → (60 min recheck) → INITIALIZING
 ## Dependencies
 
 - `node-fetch` - HTTP requests
-- `suncalc` - Sunrise/sunset calculation
+
+## Architecture
+
+### Data Sources
+
+| Field | PWS Push | PWS API v2 | WUnderground v3 | Open-Meteo |
+|-------|----------|------------|-----------------|------------|
+| Temperature | ✅ tempf (°F) | ✅ metric.temp | ✅ temperature | ✅ temperature |
+| Wind Speed | ✅ windspeedmph | ✅ metric.windSpeed | ✅ windSpeed | ✅ windspeed |
+| Wind Direction | ✅ winddir (°) | ✅ winddir (°) | ✅ windDirectionCardinal | ✅ winddirection |
+| Precipitation | ✅ dailyrainin | ✅ precipTotal | ✅ precip24Hour | ❌ |
+| Day/Night | ❌ | ❌ | ✅ dayOrNight | ✅ is_day |
+| Weather Icon | ❌ | ❌ | ✅ iconCode | ✅ weathercode |
+
+### Local Calculations
+
+| Calculation | Purpose |
+|-------------|---------|
+| `fahrenheitToCelsius()` | PWS Push sends °F → convert to °C |
+| `mphToMs()` | PWS Push sends mph → convert to m/s |
+| `inchesToMm()` | PWS Push sends inches → convert to mm |
+| `getWindDirection()` | Convert degrees → cardinal direction (N, NE, etc.) |
+
+### Data Flow
+
+```
+PWS Push (:8000)                    PWS API v2 (Fallback)
+      │                                    │
+      ▼                                    ▼
+ processPwsPush()                  loadApiDataInBackground()
+ [Unit conversion]                         │
+      │                                    │
+      ▼                                    ▼
+   pwsData ──────────────────────► apiDataCache
+                     │
+                     ▼
+              sendToFrontend()
+              + getWindDirection()
+              + weatherIconClass
+                     │
+                     ▼
+              WEATHER_DATA → Frontend
+```
 
 ## Author
 
