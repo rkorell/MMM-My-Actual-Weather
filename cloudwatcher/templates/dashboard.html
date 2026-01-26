@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="30">
+    <title>CloudWatcher Station</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-weight: 300;
+            font-size: 1.8em;
+        }
+        .card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+        .card-title {
+            font-size: 0.9em;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        .main-value {
+            font-size: 3em;
+            font-weight: 200;
+            text-align: center;
+        }
+        .condition {
+            text-align: center;
+            margin-top: 10px;
+        }
+        .condition-icon {
+            font-size: 2em;
+            margin-right: 10px;
+        }
+        .condition-text {
+            font-size: 1.2em;
+            color: #aaa;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .metric {
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 1.8em;
+            font-weight: 300;
+        }
+        .metric-label {
+            font-size: 0.8em;
+            color: #888;
+            margin-top: 5px;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .status-row:last-child {
+            border-bottom: none;
+        }
+        .status-label {
+            color: #888;
+        }
+        .status-value {
+            font-weight: 500;
+        }
+        .status-ok { color: #4caf50; }
+        .status-stale { color: #ff9800; }
+        .status-error { color: #f44336; }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 0.8em;
+            color: #666;
+        }
+        .footer a {
+            color: #4a9eff;
+        }
+        .copyright {
+            margin-top: 15px;
+            color: #555;
+        }
+        .quality-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+        }
+        .quality-ok { background: rgba(76, 175, 80, 0.3); color: #4caf50; }
+        .quality-stale { background: rgba(255, 152, 0, 0.3); color: #ff9800; }
+        .quality-error { background: rgba(244, 67, 54, 0.3); color: #f44336; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CloudWatcher Station</h1>
+        
+        <!-- Bewölkung -->
+        <div class="card">
+            <div class="card-title">Bewölkung</div>
+            <div class="main-value">{{ delta }}°C</div>
+            <div class="condition">
+                <span class="condition-icon">{{ condition_icon }}</span>
+                <span class="condition-text">
+                    {% if condition == 'clear' %}Klar
+                    {% elif condition == 'mostly_clear' %}Überwiegend klar
+                    {% elif condition == 'partly_cloudy' %}Teilweise bewölkt
+                    {% elif condition == 'mostly_cloudy' %}Überwiegend bewölkt
+                    {% elif condition == 'cloudy' %}Bewölkt
+                    {% elif condition == 'overcast' %}Bedeckt
+                    {% else %}Unbekannt
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+        
+        <!-- Temperaturen -->
+        <div class="card">
+            <div class="card-title">Temperaturen</div>
+            <div class="grid">
+                <div class="metric">
+                    <div class="metric-value">{{ sky_temp }}°C</div>
+                    <div class="metric-label">Himmel (IR)</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">{{ ambient_temp }}°C</div>
+                    <div class="metric-label">Umgebung</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sensoren -->
+        <div class="card">
+            <div class="card-title">Sensoren</div>
+            <div class="status-row">
+                <span class="status-label">Regensensor</span>
+                <span class="status-value">{{ rain_freq }} Hz 
+                    ({% if rain_status == 'Raining' %}Regen{% elif rain_status == 'Dry' %}Trocken{% else %}Unbekannt{% endif %})
+                </span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Helligkeit (LDR)</span>
+                <span class="status-value">{{ ldr }} kΩ 
+                    ({% if light_status == 'Daylight' %}Tag{% elif light_status == 'Night' %}Nacht{% else %}Unbekannt{% endif %})
+                </span>
+            </div>
+        </div>
+        
+        <!-- Systemstatus -->
+        <div class="card">
+            <div class="card-title">Systemstatus</div>
+            <div class="status-row">
+                <span class="status-label">Datenqualität</span>
+                <span class="quality-badge quality-{{ quality }}">
+                    {% if quality == 'ok' %}OK{% elif quality == 'stale' %}Veraltet{% else %}Fehler{% endif %}
+                </span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Letzte Aktualisierung</span>
+                <span class="status-value">{{ timestamp or 'Nie' }}</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Laufzeit</span>
+                <span class="status-value">{{ uptime }}</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Gerät</span>
+                <span class="status-value">{{ device_name }} ({{ firmware }})</span>
+            </div>
+        </div>
+        
+        <div class="footer">
+            Automatische Aktualisierung alle 30 Sekunden<br>
+            API: <a href="/api/data">/api/data</a> |
+            <a href="/api/raw">/api/raw</a>
+            <div class="copyright">© Dr. Ralf Korell</div>
+        </div>
+    </div>
+</body>
+</html>

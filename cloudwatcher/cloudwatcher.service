@@ -1,0 +1,31 @@
+# CloudWatcher Service
+# Modified: 2026-01-25 15:30 - Initial creation
+#
+# Installation:
+#   sudo cp cloudwatcher.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable cloudwatcher
+#   sudo systemctl start cloudwatcher
+#
+# Logs:
+#   sudo journalctl -u cloudwatcher -f
+
+[Unit]
+Description=CloudWatcher Weather Sensor Service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/cloudwatcher
+ExecStart=/usr/bin/python3 /home/pi/cloudwatcher/cloudwatcher_service.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# For access to serial port
+SupplementaryGroups=dialout
+
+[Install]
+WantedBy=multi-user.target
