@@ -217,6 +217,8 @@ ssh pi@172.23.56.60 "sudo sed -i 's|--dummy||' /etc/systemd/system/cloudwatcher.
 
 **Ziel:** Zentraler Datensammler auf dem Webserver, der PWS- und CloudWatcher-Daten aggregiert und eine API für interne und externe Nutzung bereitstellt.
 
+**Status:** Ausführliche Planungsphase erforderlich (Komplexität!)
+
 **Webserver:**
 - **Host:** WebServer (172.23.56.196)
 - **SSH:** `ssh pi@172.23.56.196` (Key-Auth von MagicMirrorPi5)
@@ -236,7 +238,59 @@ ssh pi@172.23.56.60 "sudo sed -i 's|--dummy||' /etc/systemd/system/cloudwatcher.
 - CloudWatcher-Pi: http://172.23.56.60:5000/api/data
 - PWS: Wunderground API oder direkt
 
-**Arbeitskontext:** Wird von MagicMirrorPi5 aus via SSH entwickelt (nicht von der Webserver-Claude-Instanz, die für CPQI zuständig ist)
+**Kernkonzept: Autarke Wetterkonditions-Ableitung**
+
+Mit PWS + CloudWatcher können wir ~25 WMO-Codes selbst ableiten (ohne Cloud-APIs):
+
+| Kategorie | WMO Codes | Ableitung aus |
+|-----------|-----------|---------------|
+| Cloud Cover | 0, 1, 2, 3 | CloudWatcher Delta |
+| Fog | 45, 48 | Spread + Humidity + Delta |
+| Drizzle | 51, 53, 55 | precip_rate sehr gering |
+| Freezing Drizzle | 56, 57 | Drizzle + Temp < 0°C |
+| Rain | 61, 63, 65 | precip_rate Schwellwerte |
+| Freezing Rain | 66, 67 | Rain + Temp < 0°C |
+| Snow | 71, 73, 75 | Niederschlag + Temp < ~2°C |
+| Rain Showers | 80, 81, 82 | Regen + schnelle Intensitätsänderung |
+| Snow Showers | 85, 86 | Schnee + schnelle Intensitätsänderung |
+
+**Nicht ableitbar:** Gewitter (95-99) - kein Blitzsensor
+
+**Entscheidungsbaum (State Machine):**
+```
+┌─ Niederschlag? (PWS precip_rate > 0 OR CloudWatcher rain_sensor)
+│   ├─ JA → Temp < 0°C? → FREEZING (56-57, 66-67)
+│   │        Temp < 2°C? → SNOW (71-75, 85-86)
+│   │        sonst → RAIN/DRIZZLE (51-55, 61-65, 80-82)
+│   │        Intensität → light/moderate/heavy
+│   │        Zeitverlauf → Schauer vs. Dauerregen
+│   └─ NEIN
+│       ├─ Nebel? (Spread < 2.5 AND Humidity > 95% AND Delta < 10)
+│       │   └─ JA → FOG (45, 48)
+│       └─ NEIN → Bewölkung (CloudWatcher Delta)
+│           ├─ Delta > 25 → CLEAR (0)
+│           ├─ Delta > 20 → MAINLY_CLEAR (1)
+│           ├─ Delta > 15 → PARTLY_CLOUDY (2)
+│           └─ Delta ≤ 15 → OVERCAST (3)
+└─ Tag/Nacht (CloudWatcher LDR) → Icon-Variante
+```
+
+**Datenhistorie (PostgreSQL):**
+- Zeitverläufe ermöglichen Schauer-Erkennung (schnelle Intensitätsänderung)
+- Drucktrends für Fronterkennung
+- Langzeit-Kalibrierung der Schwellwerte
+
+**Zu klären in Planungsphase:**
+- Datenbank-Schema für Zeitreihen
+- Retention Policy (wie lange speichern?)
+- Externe API: Auth erforderlich? Rate Limiting?
+- Koexistenz mit CPQI auf demselben Server
+- Apache Reverse Proxy für Flask?
+
+**Arbeitskontext:**
+- Wird von MagicMirrorPi5 aus via SSH entwickelt (nicht von der Webserver-Claude-Instanz, die für CPQI zuständig ist)
+- **Git-Workflow:** Wie CloudWatcher - Source im lokalen Repo, Deployment per rsync
+- Source-Verzeichnis: `MMM-My-Actual-Weather/weather-aggregator/` (noch anzulegen)
 
 ---
 
