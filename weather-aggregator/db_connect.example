@@ -1,0 +1,25 @@
+<?php
+/**
+ * Database Connection - Weather Aggregator
+ *
+ * Copy this file to db_connect.php and fill in real credentials.
+ * db_connect.php is NOT in Git!
+ *
+ * Modified: 2026-01-28 - Initial creation
+ */
+
+$host = 'localhost';
+$db   = 'weather';
+$user = 'weather_user';
+$pass = 'your_password_here';  // No special characters recommended
+$charset = 'utf8';
+
+$dsn = "pgsql:host=$host;port=5432;dbname=$db;user=$user;password=$pass";
+$options = [
+    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+    PDO::ATTR_EMULATE_PREPARES   => false,
+];
+
+// No internal error handling - exceptions propagate to calling script
+$pdo = new PDO($dsn);

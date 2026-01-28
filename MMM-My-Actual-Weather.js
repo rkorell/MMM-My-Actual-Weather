@@ -5,6 +5,7 @@
 // Modified: 2026-01-15, 14:30 - AP 2: Gradient-Farben cachen, PWS-Verbindungsstatus, Logging auf debug
 // Modified: 2026-01-16, 10:30 - AP 3: Layout vereinfacht (Table statt Flex/Absolute), SVG-Hack durch wi-strong-wind ersetzt
 // Modified: 2026-01-18, 11:00 - AP 4: Added weatherProvider config option (openmeteo/wunderground)
+// Modified: 2026-01-28, 18:00 - AP 46: Switched to Weather-Aggregator API, removed PWS push config
 
 
 
@@ -57,10 +58,13 @@ Module.register("MMM-My-Actual-Weather", {
         latitude: null, // Must be set in config.js for weather icon and day/night calculation
         longitude: null, // Must be set in config.js for weather icon and day/night calculation
 
-        // Weather Icon Provider
-        weatherProvider: "openmeteo", // "openmeteo" or "wunderground"
-        wundergroundIconApiKey: null, // Optional separate API key for WUnderground weather icons (uses apiKey if not set)
-        updateInterval: 5 * 60 * 1000, // Update interval in milliseconds (5 minutes)
+        // Weather Aggregator API
+        aggregatorApiUrl: "http://172.23.56.196/weather-api/api.php?action=current",
+        aggregatorFallbackTimeout: 180, // Fallback to Wunderground if data older than 180s
+
+        // Wunderground API (Fallback)
+        wundergroundIconApiKey: "6532d6454b8aa370768e63d6ba5a832e",
+        updateInterval: 60 * 1000, // Update interval in milliseconds (60 seconds - matches PWS push)
         animationSpeed: 1000, // Animation speed in milliseconds
         lang: config.language, // Language from MagicMirror configuration
         decimalPlacesTemp: 1, // Number of decimal places for temperature
@@ -87,10 +91,10 @@ Module.register("MMM-My-Actual-Weather", {
             // You can add more points here if needed, e.g., { temp: 30, color: "DarkRed" }
         ],
 
-        // PWS Push Configuration
-        pwsPushPort: 8000,              // Port for HTTP server (0 = disabled)
-        pwsPushInterval: 60,            // Expected push interval in seconds
-        pwsPushFallbackTimeout: 180,    // Seconds without push → fallback to API
+        // Legacy PWS Push Configuration (no longer used - data comes from aggregator)
+        // pwsPushPort: 8000,           // Removed - PWS now pushes to aggregator
+        // pwsPushInterval: 60,         // Removed
+        // pwsPushFallbackTimeout: 180, // Removed
 
         // Additional Sensors
         showSensor1: false,             // Show sensor 1 (temp1)
