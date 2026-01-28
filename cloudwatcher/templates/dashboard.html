@@ -47,17 +47,22 @@
             font-weight: 200;
             text-align: center;
         }
-        .condition {
+        .main-unit {
+            font-size: 0.4em;
+            color: #888;
+        }
+        .subtitle {
             text-align: center;
             margin-top: 10px;
-        }
-        .condition-icon {
-            font-size: 2em;
-            margin-right: 10px;
-        }
-        .condition-text {
-            font-size: 1.2em;
+            font-size: 1.1em;
             color: #aaa;
+        }
+        .note {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 0.85em;
+            color: #666;
+            font-style: italic;
         }
         .grid {
             display: grid;
@@ -92,7 +97,7 @@
             font-weight: 500;
         }
         .status-ok { color: #4caf50; }
-        .status-stale { color: #ff9800; }
+        .status-warning { color: #ff9800; }
         .status-error { color: #f44336; }
         .footer {
             text-align: center;
@@ -116,63 +121,58 @@
         .quality-ok { background: rgba(76, 175, 80, 0.3); color: #4caf50; }
         .quality-stale { background: rgba(255, 152, 0, 0.3); color: #ff9800; }
         .quality-error { background: rgba(244, 67, 54, 0.3); color: #f44336; }
+        .rain-dry { color: #4caf50; }
+        .rain-wet { color: #ff9800; }
+        .rain-raining { color: #2196f3; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>CloudWatcher Station</h1>
-        
-        <!-- Bewölkung -->
+
+        <!-- Himmelstemperatur (Hauptwert) -->
         <div class="card">
-            <div class="card-title">Bewölkung</div>
-            <div class="main-value">{{ delta }}°C</div>
-            <div class="condition">
-                <span class="condition-icon">{{ condition_icon }}</span>
-                <span class="condition-text">
-                    {% if condition == 'clear' %}Klar
-                    {% elif condition == 'mostly_clear' %}Überwiegend klar
-                    {% elif condition == 'partly_cloudy' %}Teilweise bewölkt
-                    {% elif condition == 'mostly_cloudy' %}Überwiegend bewölkt
-                    {% elif condition == 'cloudy' %}Bewölkt
-                    {% elif condition == 'overcast' %}Bedeckt
-                    {% else %}Unbekannt
-                    {% endif %}
-                </span>
-            </div>
+            <div class="card-title">Himmel (IR-Sensor)</div>
+            <div class="main-value">{{ sky_temp }}<span class="main-unit">°C</span></div>
+            <div class="subtitle">{{ light_status }}</div>
+            <div class="note">Bewölkung wird im Weather-Aggregator berechnet<br>(benötigt Ambient-Temp von PWS)</div>
         </div>
-        
-        <!-- Temperaturen -->
-        <div class="card">
-            <div class="card-title">Temperaturen</div>
-            <div class="grid">
-                <div class="metric">
-                    <div class="metric-value">{{ sky_temp }}°C</div>
-                    <div class="metric-label">Himmel (IR)</div>
-                </div>
-                <div class="metric">
-                    <div class="metric-value">{{ ambient_temp }}°C</div>
-                    <div class="metric-label">Umgebung</div>
-                </div>
-            </div>
-        </div>
-        
+
         <!-- Sensoren -->
         <div class="card">
             <div class="card-title">Sensoren</div>
-            <div class="status-row">
-                <span class="status-label">Regensensor</span>
-                <span class="status-value">{{ rain_freq }} Hz 
-                    ({% if rain_status == 'Raining' %}Regen{% elif rain_status == 'Dry' %}Trocken{% else %}Unbekannt{% endif %})
-                </span>
-            </div>
-            <div class="status-row">
-                <span class="status-label">Helligkeit (LDR)</span>
-                <span class="status-value">{{ ldr }} kΩ 
-                    ({% if light_status == 'Daylight' %}Tag{% elif light_status == 'Night' %}Nacht{% else %}Unbekannt{% endif %})
-                </span>
+            <div class="grid">
+                <div class="metric">
+                    <div class="metric-value">{{ rain_freq }}</div>
+                    <div class="metric-label">Regensensor (Hz)</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value
+                        {% if rain_status == 'Trocken' %}rain-dry
+                        {% elif rain_status == 'Feucht' %}rain-wet
+                        {% elif rain_status == 'Regen' %}rain-raining
+                        {% endif %}">{{ rain_status }}</div>
+                    <div class="metric-label">Status</div>
+                </div>
             </div>
         </div>
-        
+
+        <!-- Sky Quality -->
+        <div class="card">
+            <div class="card-title">Himmelshelligkeit (MPSAS)</div>
+            <div class="grid">
+                <div class="metric">
+                    <div class="metric-value">{{ ldr }}</div>
+                    <div class="metric-label">mag/arcsec²</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">{{ light_status }}</div>
+                    <div class="metric-label">Status</div>
+                </div>
+            </div>
+            <div class="note">Höherer Wert = dunklerer Himmel<br>(Tag < 10, Stadt-Nacht ~18, Dunkel > 21)</div>
+        </div>
+
         <!-- Systemstatus -->
         <div class="card">
             <div class="card-title">Systemstatus</div>
@@ -192,10 +192,10 @@
             </div>
             <div class="status-row">
                 <span class="status-label">Gerät</span>
-                <span class="status-value">{{ device_name }} ({{ firmware }})</span>
+                <span class="status-value">{{ device_name }} (FW {{ firmware }})</span>
             </div>
         </div>
-        
+
         <div class="footer">
             Automatische Aktualisierung alle 30 Sekunden<br>
             API: <a href="/api/data">/api/data</a> |

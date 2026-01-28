@@ -1,9 +1,10 @@
 # CloudWatcher Configuration
 # Modified: 2026-01-25 15:30 - Initial creation
+# Modified: 2026-01-28 19:00 - Updated for Rain Sensor Type C, added MPSAS thresholds
 
 # Serial port settings
 SERIAL_PORT = "/dev/ttyUSB0"
-BAUDRATE = 9600  # Try 19200 if 9600 doesn't work
+BAUDRATE = 9600
 
 # Web server settings
 WEB_HOST = "0.0.0.0"
@@ -13,6 +14,7 @@ WEB_PORT = 5000
 READ_INTERVAL = 30
 
 # Cloud condition thresholds (delta = ambient - sky temperature)
+# Note: ambient_temp must come from external source (PWS), not from CloudWatcher
 # These are initial values and may need calibration for the location
 THRESHOLDS = {
     "clear": 25,          # delta > 25°C = clear sky
@@ -23,27 +25,16 @@ THRESHOLDS = {
     # delta <= 5°C = overcast
 }
 
-# Temperature correction for extreme ambient temperatures
-TEMP_CORRECTION = {
-    "cold_threshold": -10,  # Below this: subtract from thresholds
-    "cold_correction": -3,
-    "hot_threshold": 25,    # Above this: add to thresholds
-    "hot_correction": 3,
-}
+# Rain sensor thresholds (Type C - no calibration required)
+# Higher frequency = drier sensor
+RAIN_THRESHOLD = 1700   # Below this = raining
+WET_THRESHOLD = 2000    # Below this = wet/damp (but not necessarily raining)
+# Note: Dry = freq > 2000, Wet = 1700-2000, Rain = freq < 1700
 
-# Rain sensor threshold (frequency)
-RAIN_THRESHOLD = 2000  # Below this = rain detected
-
-# LDR threshold for daylight detection (kOhm)
-LDR_DAYLIGHT_THRESHOLD = 50  # Below this = daylight
-
-# NTC calibration values for ambient temperature calculation
-NTC_PULLUP_RESISTANCE = 9.9   # kOhm
-NTC_RES_AT_25 = 10.0          # kOhm
-NTC_BETA = 3811
-
-# LDR pullup resistance
-LDR_PULLUP_RESISTANCE = 56    # kOhm
+# MPSAS (Sky Quality) thresholds
+# Higher MPSAS = darker sky
+# Typical values: 5-10 (daylight), 17-18 (city night), 21-22 (dark site)
+MPSAS_DAYLIGHT_THRESHOLD = 10  # Below this = daylight
 
 # Data quality settings
 STALE_THRESHOLD = 300  # seconds - data older than this is marked "stale"
