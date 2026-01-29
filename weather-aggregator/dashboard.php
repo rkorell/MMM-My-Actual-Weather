@@ -5,6 +5,8 @@
  * Web dashboard showing current weather data and 24h temperature chart.
  *
  * Modified: 2026-01-28 - Initial creation
+ * Modified: 2026-01-29 - Added indoor humidity, pressure, dewpoint display
+ * Modified: 2026-01-29 - Added weather icons and German condition names
  */
 
 require_once __DIR__ . '/db_connect.php';
@@ -47,6 +49,96 @@ function getDbStats($pdo) {
 function formatTimestamp($timestamp) {
     $dt = new DateTime($timestamp);
     return $dt->format('d.n.Y, H:i');
+}
+
+/**
+ * Format number with German notation (comma as decimal, dot as thousands)
+ */
+function formatDE($value, $decimals = 1) {
+    return number_format($value, $decimals, ',', '.');
+}
+
+/**
+ * WMO Code to weather icon filename mapping
+ * Based on node_helper.js WmoToWeatherIcon + custom.css mappings
+ * Format: [day_icon, night_icon]
+ */
+$wmoToIcon = [
+    0  => ['wsymbol_0001_sunny.png', 'wsymbol_0008_clear_sky_night.png'],
+    1  => ['wsymbol_0002_sunny_intervals.png', 'wsymbol_0041_partly_cloudy_night.png'],
+    2  => ['wsymbol_0043_mostly_cloudy.png', 'wsymbol_0042_cloudy_night.png'],
+    3  => ['wsymbol_0003_white_cloud.png', 'wsymbol_0042_cloudy_night.png'],
+    45 => ['wsymbol_0007_fog.png', 'wsymbol_0064_fog_night.png'],
+    48 => ['wsymbol_0047_freezing_fog.png', 'wsymbol_0065_freezing_fog_night.png'],
+    51 => ['wsymbol_0048_drizzle.png', 'wsymbol_0066_drizzle_night.png'],
+    53 => ['wsymbol_0081_heavy_drizzle.png', 'wsymbol_0082_heavy_drizzle_night.png'],
+    55 => ['wsymbol_0083_heavy_freezing_drizzle.png', 'wsymbol_0084_heavy_freezing_drizzle_night.png'],
+    56 => ['wsymbol_0049_freezing_drizzle.png', 'wsymbol_0067_freezing_drizzle_night.png'],
+    57 => ['wsymbol_0083_heavy_freezing_drizzle.png', 'wsymbol_0084_heavy_freezing_drizzle_night.png'],
+    61 => ['wsymbol_0009_light_rain_showers.png', 'wsymbol_0025_light_rain_showers_night.png'],
+    63 => ['wsymbol_0010_heavy_rain_showers.png', 'wsymbol_0026_heavy_rain_showers_night.png'],
+    65 => ['wsymbol_0051_extreme_rain.png', 'wsymbol_0069_extreme_rain_night.png'],
+    66 => ['wsymbol_0050_freezing_rain.png', 'wsymbol_0068_freezing_rain_night.png'],
+    67 => ['wsymbol_0050_freezing_rain.png', 'wsymbol_0068_freezing_rain_night.png'],
+    71 => ['wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png'],
+    73 => ['wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png'],
+    75 => ['wsymbol_0053_blowing_snow.png', 'wsymbol_0028_heavy_snow_showers_night.png'],
+    77 => ['wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png'],
+    80 => ['wsymbol_0017_cloudy_with_light_rain.png', 'wsymbol_0025_light_rain_showers_night.png'],
+    81 => ['wsymbol_0018_cloudy_with_heavy_rain.png', 'wsymbol_0026_heavy_rain_showers_night.png'],
+    82 => ['wsymbol_0051_extreme_rain.png', 'wsymbol_0069_extreme_rain_night.png'],
+    85 => ['wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png'],
+    86 => ['wsymbol_0053_blowing_snow.png', 'wsymbol_0028_heavy_snow_showers_night.png'],
+    95 => ['wsymbol_0024_thunderstorms.png', 'wsymbol_0032_thundery_showers_night.png'],
+    96 => ['wsymbol_0059_thunderstorms_with_hail.png', 'wsymbol_0077_thunderstorms_with_hail_night.png'],
+    99 => ['wsymbol_0059_thunderstorms_with_hail.png', 'wsymbol_0077_thunderstorms_with_hail_night.png'],
+];
+
+/**
+ * Condition string to German translation
+ */
+$conditionDE = [
+    'clear' => 'Klar',
+    'mainly_clear' => 'Überwiegend klar',
+    'partly_cloudy' => 'Teilweise bewölkt',
+    'overcast' => 'Bedeckt',
+    'fog' => 'Nebel',
+    'depositing_rime_fog' => 'Reifnebel',
+    'drizzle_light' => 'Leichter Nieselregen',
+    'drizzle_moderate' => 'Nieselregen',
+    'drizzle_dense' => 'Starker Nieselregen',
+    'freezing_drizzle_light' => 'Gefrierender Niesel',
+    'freezing_drizzle_dense' => 'Starker gefr. Niesel',
+    'rain_slight' => 'Leichter Regen',
+    'rain_moderate' => 'Regen',
+    'rain_heavy' => 'Starkregen',
+    'freezing_rain_light' => 'Gefrierender Regen',
+    'freezing_rain_heavy' => 'Starker gefr. Regen',
+    'snow_slight' => 'Leichter Schneefall',
+    'snow_moderate' => 'Schneefall',
+    'snow_heavy' => 'Starker Schneefall',
+    'rain_showers_slight' => 'Leichte Schauer',
+    'rain_showers_moderate' => 'Regenschauer',
+    'rain_showers_violent' => 'Heftige Schauer',
+    'snow_showers_slight' => 'Leichte Schneeschauer',
+    'snow_showers_heavy' => 'Schneeschauer',
+];
+
+/**
+ * Get weather icon filename for WMO code
+ */
+function getWeatherIcon($wmoCode, $isDaylight, $wmoToIcon) {
+    if (isset($wmoToIcon[$wmoCode])) {
+        return $isDaylight ? $wmoToIcon[$wmoCode][0] : $wmoToIcon[$wmoCode][1];
+    }
+    return 'wsymbol_0999_unknown.png';
+}
+
+/**
+ * Get German condition name
+ */
+function getConditionDE($condition, $conditionDE) {
+    return $conditionDE[$condition] ?? ucfirst(str_replace('_', ' ', $condition));
 }
 
 // Fetch data
@@ -310,15 +402,15 @@ foreach ($history as $row) {
         <div class="section-title">Temperatur</div>
         <div class="card-grid">
             <div class="card">
-                <div class="card-value temp"><?= number_format($current['temp_c'], 1) ?>°C</div>
+                <div class="card-value temp"><?= formatDE($current['temp_c'], 1) ?>°C</div>
                 <div class="card-label">Außen</div>
             </div>
             <div class="card">
-                <div class="card-value sky"><?= $current['sky_temp_c'] !== null ? number_format($current['sky_temp_c'], 1) . '°C' : '—' ?></div>
+                <div class="card-value sky"><?= $current['sky_temp_c'] !== null ? formatDE($current['sky_temp_c'], 1) . '°C' : '—' ?></div>
                 <div class="card-label">Sky Temp</div>
             </div>
             <div class="card">
-                <div class="card-value"><?= $current['delta_c'] !== null ? number_format($current['delta_c'], 1) . '°C' : '—' ?></div>
+                <div class="card-value"><?= $current['delta_c'] !== null ? formatDE($current['delta_c'], 1) . '°C' : '—' ?></div>
                 <div class="card-label">Delta</div>
             </div>
         </div>
@@ -326,37 +418,67 @@ foreach ($history as $row) {
         <!-- Weather Row -->
         <div class="card-grid">
             <div class="card">
-                <div class="card-value"><?= number_format($current['humidity'], 0) ?>%</div>
+                <div class="card-value"><?= formatDE($current['humidity'], 0) ?>%</div>
                 <div class="card-label">Luftfeuchte</div>
             </div>
             <div class="card">
-                <div class="card-value"><?= $current['wind_speed_ms'] !== null ? number_format($current['wind_speed_ms'] * 3.6, 1) . ' km/h' : '—' ?></div>
+                <div class="card-value"><?= $current['dewpoint_c'] !== null ? formatDE($current['dewpoint_c'], 1) . '°C' : '—' ?></div>
+                <div class="card-label">Taupunkt</div>
+            </div>
+            <div class="card">
+                <div class="card-value"><?= $current['pressure_hpa'] !== null ? formatDE($current['pressure_hpa'], 0) . ' hPa' : '—' ?></div>
+                <div class="card-label">Luftdruck</div>
+            </div>
+            <div class="card">
+                <div class="card-value"><?= $current['wind_speed_ms'] !== null ? formatDE($current['wind_speed_ms'] * 3.6, 1) . ' km/h' : '—' ?></div>
                 <div class="card-label">Wind</div>
             </div>
             <div class="card">
-                <div class="card-value"><?= $current['precip_today_mm'] !== null ? number_format($current['precip_today_mm'], 1) . ' mm' : '—' ?></div>
+                <div class="card-value"><?= $current['precip_today_mm'] !== null ? formatDE($current['precip_today_mm'], 1) . ' mm' : '—' ?></div>
                 <div class="card-label">Niederschlag</div>
             </div>
         </div>
 
-        <!-- Condition -->
+        <!-- Condition with Icon -->
+        <?php
+            $isDaylight = $current['cw_is_daylight'] === 't' || $current['cw_is_daylight'] === true;
+            $iconFile = getWeatherIcon($current['wmo_code'], $isDaylight, $wmoToIcon);
+            $conditionText = getConditionDE($current['condition'] ?? '', $conditionDE);
+        ?>
         <div class="card-grid">
             <div class="card condition-card">
-                <div class="card-value"><?= ucfirst(str_replace('_', ' ', $current['condition'] ?? '—')) ?></div>
-                <div class="card-label">WMO <?= $current['wmo_code'] ?? '—' ?></div>
+                <table style="margin: 0 auto; border-spacing: 0;">
+                    <tr>
+                        <td style="vertical-align: middle;">
+                            <img src="icons/<?= $iconFile ?>" width="128" height="128" alt="<?= $conditionText ?>">
+                        </td>
+                        <td style="vertical-align: middle; padding-left: 20px; text-align: left;">
+                            <div class="card-value"><?= $conditionText ?></div>
+                            <div class="card-label">WMO <?= $current['wmo_code'] ?? '—' ?></div>
+                        </td>
+                    </tr>
+                </table>
             </div>
         </div>
 
         <!-- Sensors -->
-        <div class="section-title">Sensoren</div>
+        <div class="section-title">Sensoren (Indoor)</div>
         <div class="card-grid">
             <div class="card">
-                <div class="card-value sensor1"><?= $current['temp1_c'] !== null ? number_format($current['temp1_c'], 1) . '°C' : '—' ?></div>
-                <div class="card-label"><?= SENSOR1_NAME ?></div>
+                <div class="card-value sensor1"><?= $current['temp1_c'] !== null ? formatDE($current['temp1_c'], 1) . '°C' : '—' ?></div>
+                <div class="card-label"><?= SENSOR1_NAME ?> Temp</div>
             </div>
             <div class="card">
-                <div class="card-value sensor2"><?= $current['temp2_c'] !== null ? number_format($current['temp2_c'], 1) . '°C' : '—' ?></div>
-                <div class="card-label"><?= SENSOR2_NAME ?></div>
+                <div class="card-value sensor1"><?= $current['humidity1'] !== null ? $current['humidity1'] . '%' : '—' ?></div>
+                <div class="card-label"><?= SENSOR1_NAME ?> Feuchte</div>
+            </div>
+            <div class="card">
+                <div class="card-value sensor2"><?= $current['temp2_c'] !== null ? formatDE($current['temp2_c'], 1) . '°C' : '—' ?></div>
+                <div class="card-label"><?= SENSOR2_NAME ?> Temp</div>
+            </div>
+            <div class="card">
+                <div class="card-value sensor2"><?= $current['humidity2'] !== null ? $current['humidity2'] . '%' : '—' ?></div>
+                <div class="card-label"><?= SENSOR2_NAME ?> Feuchte</div>
             </div>
         </div>
 
@@ -368,7 +490,7 @@ foreach ($history as $row) {
                 <div class="card-label">Rain Freq</div>
             </div>
             <div class="card">
-                <div class="card-value"><?= $current['mpsas'] !== null ? number_format($current['mpsas'], 2) : '—' ?></div>
+                <div class="card-value"><?= $current['mpsas'] !== null ? formatDE($current['mpsas'], 2) : '—' ?></div>
                 <div class="card-label">MPSAS</div>
             </div>
             <div class="card">
@@ -410,7 +532,7 @@ foreach ($history as $row) {
 
         <footer>
             <span>Stand: <?= $current ? formatTimestamp($current['timestamp']) : '—' ?></span>
-            <span><?= number_format($dbCount) ?> Einträge</span>
+            <span><?= formatDE($dbCount, 0) ?> Einträge</span>
             <span>Refresh: 60s</span>
         </footer>
     </div>
@@ -441,7 +563,7 @@ foreach ($history as $row) {
                     borderWidth: 1,
                     callbacks: {
                         label: function(context) {
-                            return context.dataset.label + ': ' + (context.parsed.y !== null ? context.parsed.y.toFixed(1) + '°C' : '—');
+                            return context.dataset.label + ': ' + (context.parsed.y !== null ? context.parsed.y.toFixed(1).replace('.', ',') + '°C' : '—');
                         }
                     }
                 }
@@ -460,7 +582,7 @@ foreach ($history as $row) {
                     ticks: {
                         color: '#aaa',
                         callback: function(value) {
-                            return value + '°C';
+                            return value.toString().replace('.', ',') + '°C';
                         }
                     },
                     grid: {

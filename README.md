@@ -1,39 +1,48 @@
 # MMM-My-Actual-Weather
 
-MagicMirror² module for current weather data from your own Personal Weather Station (PWS) with API fallback.
+MagicMirror² module displaying weather data from a Personal Weather Station (PWS) combined with CloudWatcher IR sky sensor data. Uses a weather aggregator backend that derives WMO weather codes locally from sensor data.
 
 ## Features
 
-- **PWS Push Reception**: HTTP server receives data directly from your weather station (e.g., Ecowitt, Ambient Weather)
-- **API Fallback**: Automatic switch to Wunderground API when PWS is unavailable
-- **State Machine**: Clean coordination between PWS and API data sources
-- **Additional Sensors**: Support for up to 2 additional temperature sensors
+- **Weather Aggregator Integration**: Polls weather data from a central aggregator API
+- **CloudWatcher IR Sensor**: Sky temperature measurement for accurate cloud detection
+- **Local WMO Code Derivation**: Weather conditions determined from actual sensor data (no external weather API needed)
+- **Wunderground Fallback**: Automatic fallback when aggregator data is stale
+- **Additional Sensors**: Support for up to 2 indoor temperature/humidity sensors
 - **Temperature Color Gradient**: Temperature-dependent color display (configurable)
-- **Day/Night Icons**: Automatic weather icon adjustment based on sunrise/sunset
-- **Multilingual**: German and English
+- **Day/Night Icons**: Automatic weather icon adjustment based on CloudWatcher daylight detection
+
+## Architecture
+
+```
+┌─────────────┐  HTTP POST (every 60s)
+│  PWS        │ ─────────────────────────┐
+│ (IGEROL23)  │                          │
+└─────────────┘                          ▼
+                            ┌────────────────────────────────────────┐
+                            │  Weather Aggregator (Webserver)        │
+                            │                                        │
+┌─────────────┐  HTTP GET   │  pws_receiver.php                      │
+│ CloudWatcher│ ◄───────────│    ├── Parse PWS data                  │
+│  (IR Sensor)│             │    ├── Fetch CloudWatcher API          │
+└─────────────┘             │    ├── Derive WMO code                 │
+                            │    └── Store in PostgreSQL             │
+                            │                                        │
+                            │  api.php → JSON API                    │
+                            └────────────────────────────────────────┘
+                                          │
+                                          ▼ HTTP GET (polling every 60s)
+                            ┌────────────────────────────────────────┐
+                            │  MagicMirror                           │
+                            │    ├── Poll aggregator API             │
+                            │    ├── Fallback: Wunderground API      │
+                            │    └── Display weather data            │
+                            └────────────────────────────────────────┘
+```
 
 ## Screenshot
 
 ![MMM-My-Actual-Weather](img/MyActualWeather.png)
-
-## Layout
-
-The module uses a simple 2-row table layout:
-
-```
-┌─────────────┬──────────────────────┐
-│   WEATHER   │  Wind Info           │
-│    ICON     │  TEMPERATURE         │
-├─────────────┼──────────────────────┤
-│   (empty)   │  Sensor 1            │
-│             │  Sensor 2            │
-│             │  Precipitation       │
-└─────────────┴──────────────────────┘
-```
-
-- **Row 1**: Weather icon (left) next to wind info and temperature (right)
-- **Row 2**: Sensor data and precipitation (right-aligned)
-- Wind icon: `wi-strong-wind` from Weather Icons font
 
 ## Installation
 
@@ -53,21 +62,18 @@ Add the following to your `config/config.js`:
     module: "MMM-My-Actual-Weather",
     position: "top_right",
     config: {
-        // Wunderground API (required)
-        stationId: "YOUR_STATION_ID",
-        apiKey: "YOUR_API_KEY",
+        // Weather Aggregator (primary data source)
+        aggregatorApiUrl: "http://YOUR_SERVER/weather-api/api.php?action=current",
+        aggregatorFallbackTimeout: 180,  // Fallback after 180s stale data
 
-        // Location for weather icon provider (required)
+        // Wunderground (fallback)
+        stationId: "YOUR_STATION_ID",
+        apiKey: "YOUR_PWS_API_KEY",
+        wundergroundIconApiKey: "YOUR_V3_API_KEY",  // For icon lookup
+
+        // Location (for Wunderground fallback icons)
         latitude: 50.242,
         longitude: 6.603,
-
-        // Weather Icon Provider
-        weatherProvider: "wunderground",      // "openmeteo" or "wunderground"
-        wundergroundIconApiKey: "YOUR_KEY",   // Optional: separate key for v3 API
-
-        // PWS Push Server
-        pwsPushPort: 8000,           // HTTP server port (0 = disabled)
-        pwsPushInterval: 60,         // Expected push interval in seconds
 
         // Additional Sensors
         showSensor1: true,
@@ -75,67 +81,59 @@ Add the following to your `config/config.js`:
         sensor1Name: "Living Room",
         sensor2Name: "Office",
 
-        // Temperature Color Gradient
-        tempColorGradient: [
-            { temp: -20, color: "#b05899" },
-            { temp: -14, color: "#6a4490" },
-            { temp: -10, color: "#544691" },
-            { temp: -5, color: "#484894" },
-            { temp: -1, color: "#547bbb" },
-            { temp: 4, color: "#70bbe8" },
-            { temp: 8, color: "#c2ce2c" },
-            { temp: 12, color: "#ecc82d" },
-            { temp: 16, color: "#eebf2e" },
-            { temp: 20, color: "#eec12c" },
-            { temp: 24, color: "#e2a657" },
-            { temp: 27, color: "#db8f32" },
-            { temp: 30, color: "#bb5a20" },
-            { temp: 32, color: "#c04117" }
-        ]
+        // Display
+        lang: "de"
     }
 }
 ```
 
-## All Configuration Options
+## Configuration Options
+
+### Aggregator Settings
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| **API Settings** |
-| `stationId` | String | - | Wunderground Station ID (required) |
-| `apiKey` | String | - | Wunderground API Key (required) |
-| `baseURL` | String | `https://api.weather.com/...` | Wunderground API URL |
-| `openMeteoUrl` | String | `https://api.open-meteo.com/...` | Open-Meteo API URL |
-| `latitude` | Number | `null` | Latitude (required) |
-| `longitude` | Number | `null` | Longitude (required) |
-| `units` | String | `"m"` | Units: `"m"` (metric), `"e"` (imperial) |
-| `updateInterval` | Number | `300000` | Update interval in ms (5 min) |
-| **Weather Icon Provider** |
-| `weatherProvider` | String | `"openmeteo"` | Icon provider: `"openmeteo"` or `"wunderground"` |
-| `wundergroundIconApiKey` | String | `null` | Separate API key for WUnderground icons (uses `apiKey` if not set) |
-| **PWS Push Server** |
-| `pwsPushPort` | Number | `8000` | HTTP server port (0 = disabled) |
-| `pwsPushInterval` | Number | `60` | Expected push interval (seconds) |
-| `pwsPushFallbackTimeout` | Number | `180` | Timeout for API fallback (seconds) |
-| **Sensors** |
-| `showSensor1` | Boolean | `false` | Show sensor 1 |
-| `showSensor2` | Boolean | `false` | Show sensor 2 |
+| `aggregatorApiUrl` | String | - | URL to weather aggregator API (required) |
+| `aggregatorFallbackTimeout` | Number | `180` | Seconds before switching to Wunderground fallback |
+| `updateInterval` | Number | `60000` | Polling interval in ms (60 seconds) |
+
+### Wunderground Fallback
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `stationId` | String | - | Wunderground Station ID |
+| `apiKey` | String | - | Wunderground PWS API v2 Key |
+| `wundergroundIconApiKey` | String | - | Wunderground v3 API Key (for icons) |
+| `latitude` | Number | - | Latitude for icon lookup |
+| `longitude` | Number | - | Longitude for icon lookup |
+| `baseURL` | String | `https://api.weather.com/v2/pws/observations/current?format=json` | PWS API URL |
+
+### Sensor Display
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `showSensor1` | Boolean | `false` | Show indoor sensor 1 |
+| `showSensor2` | Boolean | `false` | Show indoor sensor 2 |
 | `sensor1Name` | String | `"WoZi"` | Display name for sensor 1 |
 | `sensor2Name` | String | `"Therapie"` | Display name for sensor 2 |
 | `sensorTextColor` | String | `"lightgray"` | Text color for sensors |
-| **Display** |
+
+### Display Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
 | `decimalPlacesTemp` | Number | `1` | Decimal places for temperature |
 | `decimalPlacesPrecip` | Number | `1` | Decimal places for precipitation |
 | `windColor` | String | `"white"` | Color for wind display |
 | `precipitationColor` | String | `"white"` | Color for precipitation |
 | `temperatureColor` | String | `"white"` | Temperature color (when `tempSensitive: false`) |
-| `tempSensitive` | Boolean | `true` | Temperature-dependent coloring |
-| `showDataSource` | Boolean | `true` | Show timestamp for PWS data |
+| `tempSensitive` | Boolean | `true` | Enable temperature color gradient |
+| `showDataSource` | Boolean | `true` | Show data timestamp |
 | `animationSpeed` | Number | `1000` | Animation speed (ms) |
 | `lang` | String | `config.language` | Language (de/en) |
+| `units` | String | `"m"` | Units: `"m"` (metric), `"e"` (imperial) |
 
-## Temperature Color Gradient
-
-The color gradient can be customized. Colors are interpolated between defined points:
+### Temperature Color Gradient
 
 ```javascript
 tempColorGradient: [
@@ -156,101 +154,146 @@ tempColorGradient: [
 ]
 ```
 
-## PWS Configuration
+## WMO Weather Code Derivation
 
-Configure your weather station to send data via HTTP POST to the MagicMirror:
+The weather aggregator derives WMO codes locally from sensor data:
 
-- **URL**: `http://<MagicMirror-IP>:8000/data/report/`
-- **Method**: POST
-- **Format**: URL-encoded (standard for Ecowitt/Wunderground-compatible stations)
+| Condition | WMO Code | Derivation |
+|-----------|----------|------------|
+| Clear | 0 | Delta > 25°C |
+| Mainly Clear | 1 | Delta > 20°C |
+| Partly Cloudy | 2 | Delta > 15°C |
+| Overcast | 3 | Delta ≤ 15°C |
+| Fog | 45 | Spread < 2.5°C AND Humidity > 95% AND Delta < 10°C |
+| Drizzle | 51, 53, 55 | Low precipitation rate |
+| Rain | 61, 63, 65 | Precipitation rate by intensity |
+| Freezing Rain | 66, 67 | Rain + Temp < 0°C |
+| Snow | 71, 73, 75 | Precipitation + Temp < 2°C |
 
-### Supported Fields
+**Delta** = Ambient temperature - Sky temperature (from CloudWatcher IR sensor)
 
-| Field | Description |
-|-------|-------------|
-| `tempf` | Outdoor temperature (°F) |
-| `windspeedmph` | Wind speed (mph) |
-| `winddir` | Wind direction (degrees) |
-| `dailyrainin` | Daily precipitation (inches) |
-| `temp1f` | Sensor 1 temperature (°F) |
-| `humidity1` | Sensor 1 humidity (%) |
-| `temp2f` | Sensor 2 temperature (°F) |
-| `humidity2` | Sensor 2 humidity (%) |
-| `dateutc` | Timestamp |
+**Spread** = Ambient temperature - Dewpoint
 
-## State Machine
+## Aggregator API Response
 
-The module uses a state machine for data source coordination:
+The module expects the following JSON structure from the aggregator API:
+
+```json
+{
+    "timestamp": "2026-01-29T19:40:22+01:00",
+    "temp_c": 1.0,
+    "humidity": 99,
+    "dewpoint_c": 0.86,
+    "pressure_hpa": 1001.2,
+    "wind_speed_ms": 2.4,
+    "wind_dir_deg": 270,
+    "precip_rate_mm": 0,
+    "precip_today_mm": 3.1,
+    "temp1_c": 21.5,
+    "temp2_c": 19.8,
+    "humidity1": 50,
+    "humidity2": 36,
+    "sky_temp_c": -8.5,
+    "delta_c": 9.5,
+    "wmo_code": 3,
+    "condition": "overcast",
+    "is_raining": false,
+    "is_daylight": true,
+    "data_age_s": 15
+}
+```
+
+## Weather Aggregator Setup
+
+The weather aggregator is a separate PHP application that runs on a webserver. See the `weather-aggregator/` directory for the source code.
+
+### Components
+
+| File | Description |
+|------|-------------|
+| `pws_receiver.php` | Receives PWS push data, fetches CloudWatcher, stores to DB |
+| `wmo_derivation.php` | WMO code derivation logic |
+| `api.php` | JSON API for MagicMirror |
+| `dashboard.php` | Web dashboard with charts |
+| `config.php` | Configuration (thresholds, URLs) |
+| `db_connect.php` | Database credentials (not in Git) |
+
+### Deployment
+
+1. Copy `weather-aggregator/` to your webserver (e.g., `/var/www/weather-api/`)
+2. Create PostgreSQL database and user
+3. Run `setup/schema.sql` to create tables
+4. Copy `db_connect.example` to `db_connect.php` and enter credentials
+5. Configure your PWS to push to `http://YOUR_SERVER/weather-api/pws_receiver.php`
+
+## Data Flow
 
 ```
-                         ┌─────────────────────────────────────┐
-                         │  PWS push received (from any state) │
-                         └──────────────────┬──────────────────┘
-                                            ▼
-┌──────────────┐  3 sec    ┌─────────────────────┐  3x interval  ┌──────────────┐
-│ INITIALIZING │ ────────► │   WAITING_FOR_PWS   │ ────────────► │   API_ONLY   │
-└──────────────┘  timeout  └─────────────────────┘    timeout    └──────────────┘
-                                    ▲                                   │
-                                    │ 3x interval timeout               │ 60 min
-                                    │                                   │ recheck
-                           ┌────────┴───────┐                           │
-                           │   PWS_ACTIVE   │ ◄─────────────────────────┘
-                           └────────────────┘
+PWS Push (every 60s)
+      │
+      ▼
+Aggregator (pws_receiver.php)
+      ├── Parse PWS data (convert units)
+      ├── Fetch CloudWatcher API
+      ├── Calculate: dewpoint, pressure (QNH)
+      ├── Derive WMO code from sensors
+      └── Store to PostgreSQL
+              │
+              ▼
+Aggregator API (api.php?action=current)
+              │
+              ▼
+MagicMirror (node_helper.js)
+      ├── Poll aggregator API (every 60s)
+      ├── If data_age > 180s → Wunderground fallback
+      ├── Map WMO code → weather icon
+      └── Send to frontend
+              │
+              ▼
+Frontend (MMM-My-Actual-Weather.js)
+      └── Render weather display
 ```
 
-- **INITIALIZING**: Waiting for first PWS push (max 3 seconds)
-- **PWS_ACTIVE**: PWS delivers data, API only for weather icons
-- **WAITING_FOR_PWS**: Display API data, waiting for PWS to respond
-- **API_ONLY**: API data only, recheck for PWS every 60 minutes
+## Icon Mapping
 
-**Note**: PWS push reception transitions to PWS_ACTIVE from any state.
+Weather icons are mapped from WMO codes using the `WmoToWeatherIcon` lookup table. Icons are from the Weather Icons font with day/night variants based on `is_daylight` from CloudWatcher.
 
 ## Dependencies
 
-- `node-fetch` - HTTP requests
+- `node-fetch` - HTTP requests for API polling
 
-## Architecture
+## Debugging
 
-### Data Sources
+```bash
+# MagicMirror logs
+pm2 logs MagicMirror --lines 50 | grep "MMM-My-Actual-Weather"
 
-| Field | PWS Push | PWS API v2 | WUnderground v3 | Open-Meteo |
-|-------|----------|------------|-----------------|------------|
-| Temperature | ✅ tempf (°F) | ✅ metric.temp | ✅ temperature | ✅ temperature |
-| Wind Speed | ✅ windspeedmph | ✅ metric.windSpeed | ✅ windSpeed | ✅ windspeed |
-| Wind Direction | ✅ winddir (°) | ✅ winddir (°) | ✅ windDirectionCardinal | ✅ winddirection |
-| Precipitation | ✅ dailyrainin | ✅ precipTotal | ✅ precip24Hour | ❌ |
-| Day/Night | ❌ | ❌ | ✅ dayOrNight | ✅ is_day |
-| Weather Icon | ❌ | ❌ | ✅ iconCode | ✅ weathercode |
+# Test aggregator API
+curl -s "http://YOUR_SERVER/weather-api/api.php?action=current" | jq
 
-### Local Calculations
+# Check aggregator status
+curl -s "http://YOUR_SERVER/weather-api/api.php?action=status" | jq
 
-| Calculation | Purpose |
-|-------------|---------|
-| `fahrenheitToCelsius()` | PWS Push sends °F → convert to °C |
-| `mphToMs()` | PWS Push sends mph → convert to m/s |
-| `inchesToMm()` | PWS Push sends inches → convert to mm |
-| `getWindDirection()` | Convert degrees → cardinal direction (N, NE, etc.) |
-
-### Data Flow
-
+# Test CloudWatcher API
+curl -s "http://CLOUDWATCHER_IP:5000/api/data" | jq
 ```
-PWS Push (:8000)                    PWS API v2 (Fallback)
-      │                                    │
-      ▼                                    ▼
- processPwsPush()                  loadApiDataInBackground()
- [Unit conversion]                         │
-      │                                    │
-      ▼                                    ▼
-   pwsData ──────────────────────► apiDataCache
-                     │
-                     ▼
-              sendToFrontend()
-              + getWindDirection()
-              + weatherIconClass
-                     │
-                     ▼
-              WEATHER_DATA → Frontend
-```
+
+## Known Limitations
+
+- **No thunderstorm detection**: No lightning sensor available (WMO 95-99 not derivable)
+- **Wunderground fallback**: Does not include indoor sensors or CloudWatcher data
+- **Rate limits**: Wunderground v3 API has 500 calls/day limit
+
+## Changelog
+
+| Date | Description |
+|------|-------------|
+| 2026-01-28 | Switched to Weather-Aggregator architecture |
+| 2026-01-29 | Added dewpoint calculation, pressure QNH, indoor humidity |
+| 2026-01-18 | Dual weather provider support (WUnderground/OpenMeteo) |
+| 2026-01-16 | Layout simplified (table instead of flex) |
+| 2026-01-15 | State machine for PWS/API coordination |
+| 2026-01-14 | Initial release with PWS push server |
 
 ## Author
 

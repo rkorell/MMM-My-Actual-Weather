@@ -11,6 +11,7 @@
  *   ?action=status   - System status (last update, DB stats)
  *
  * Modified: 2026-01-28 - Initial creation (Phase 3)
+ * Modified: 2026-01-29 - Added humidity1, humidity2 to current endpoint
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -67,6 +68,8 @@ function getCurrentWeather($pdo) {
         'solar_radiation' => $row['solar_radiation'] !== null ? floatval($row['solar_radiation']) : null,
         'temp1_c' => $row['temp1_c'] !== null ? floatval($row['temp1_c']) : null,
         'temp2_c' => $row['temp2_c'] !== null ? floatval($row['temp2_c']) : null,
+        'humidity1' => $row['humidity1'] !== null ? intval($row['humidity1']) : null,
+        'humidity2' => $row['humidity2'] !== null ? intval($row['humidity2']) : null,
         'sky_temp_c' => $row['sky_temp_c'] !== null ? floatval($row['sky_temp_c']) : null,
         'delta_c' => $row['delta_c'] !== null ? floatval($row['delta_c']) : null,
         'rain_freq' => $row['rain_freq'] !== null ? intval($row['rain_freq']) : null,

@@ -8,6 +8,7 @@
  * Modified: 2026-01-28 - Initial creation (Phase 1)
  * Modified: 2026-01-28 - Added CloudWatcher API + WMO derivation (Phase 2)
  * Modified: 2026-01-28 - Fixed: Removed ID check, corrected rainratein parameter name
+ * Modified: 2026-01-29 - Added dewpoint calculation, pressure from baromabsin, humidity1/humidity2
  */
 
 // Error reporting for development (disable in production)
@@ -49,6 +50,43 @@ function inchesToMm($inches) {
 function inhgToHpa($inhg) {
     if ($inhg === null || $inhg === '') return null;
     return round($inhg * 33.8639, 1);
+}
+
+/**
+ * Calculate dewpoint using Magnus formula
+ */
+function calculateDewpoint($tempC, $humidity) {
+    if ($tempC === null || $humidity === null || $humidity <= 0) {
+        return null;
+    }
+    $a = 17.625;
+    $b = 243.04;
+    $alpha = log($humidity / 100) + ($a * $tempC) / ($b + $tempC);
+    return round($b * $alpha / ($a - $alpha), 2);
+}
+
+/**
+ * Calculate relative pressure (reduced to sea level) using barometric formula
+ */
+function calculateRelativePressure($absInHg, $tempC) {
+    if ($absInHg === null || $tempC === null) {
+        return null;
+    }
+    // Convert to hPa
+    $pAbs = $absInHg * 33.8639;
+
+    // Constants
+    $g0 = 9.80665;  // Gravitational acceleration
+    $R = 287.05;    // Gas constant for dry air
+    $a = 0.0065;    // Temperature gradient (K/m)
+
+    // Temperature in Kelvin
+    $TK = $tempC + 273.15;
+
+    // Barometric height formula
+    $pRel = $pAbs * exp(($g0 * STATION_HEIGHT) / ($R * ($TK + ($a * STATION_HEIGHT) / 2)));
+
+    return round($pRel, 1);
 }
 
 /**
@@ -121,11 +159,14 @@ try {
     logMessage("PWS push received (type: $stationType)");
 
     // Parse and convert PWS data
+    $temp_c = fahrenheitToCelsius(getParam('tempf'));
+    $humidity = floatval(getParam('humidity'));
+
     $pws = [
-        'temp_c' => fahrenheitToCelsius(getParam('tempf')),
-        'humidity' => floatval(getParam('humidity')),
-        'dewpoint_c' => fahrenheitToCelsius(getParam('dewptf')),
-        'pressure_hpa' => inhgToHpa(getParam('baromin')),
+        'temp_c' => $temp_c,
+        'humidity' => $humidity,
+        'dewpoint_c' => calculateDewpoint($temp_c, $humidity),
+        'pressure_hpa' => calculateRelativePressure(getParam('baromabsin'), $temp_c),
         'wind_speed_ms' => mphToMs(getParam('windspeedmph')),
         'wind_dir_deg' => intval(getParam('winddir', 0)),
         'wind_gust_ms' => mphToMs(getParam('windgustmph')),
@@ -135,6 +176,8 @@ try {
         'solar_radiation' => floatval(getParam('solarradiation')),
         'temp1_c' => fahrenheitToCelsius(getParam('temp1f')),
         'temp2_c' => fahrenheitToCelsius(getParam('temp2f')),
+        'humidity1' => intval(getParam('humidity1')),
+        'humidity2' => intval(getParam('humidity2')),
     ];
 
     // Fetch CloudWatcher data
@@ -162,6 +205,7 @@ try {
         wind_speed_ms, wind_dir_deg, wind_gust_ms,
         precip_rate_mm, precip_today_mm,
         uv_index, solar_radiation, temp1_c, temp2_c,
+        humidity1, humidity2,
         sky_temp_c, rain_freq, mpsas, cw_is_raining, cw_is_daylight,
         delta_c, wmo_code, condition
     ) VALUES (
@@ -169,6 +213,7 @@ try {
         :wind_speed_ms, :wind_dir_deg, :wind_gust_ms,
         :precip_rate_mm, :precip_today_mm,
         :uv_index, :solar_radiation, :temp1_c, :temp2_c,
+        :humidity1, :humidity2,
         :sky_temp_c, :rain_freq, :mpsas, :cw_is_raining, :cw_is_daylight,
         :delta_c, :wmo_code, :condition
     )";
@@ -188,6 +233,8 @@ try {
         ':solar_radiation' => $pws['solar_radiation'],
         ':temp1_c' => $pws['temp1_c'],
         ':temp2_c' => $pws['temp2_c'],
+        ':humidity1' => $pws['humidity1'] ?: null,
+        ':humidity2' => $pws['humidity2'] ?: null,
         ':sky_temp_c' => $cw['sky_temp_c'],
         ':rain_freq' => $cw['rain_freq'],
         ':mpsas' => $cw['mpsas'],

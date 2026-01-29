@@ -8,6 +8,9 @@
  * Modified: 2026-01-28 - Initial creation
  */
 
+// Station location
+define('STATION_HEIGHT', 416);  // Meters above sea level (Müllenborn)
+
 // CloudWatcher API
 define('CLOUDWATCHER_API_URL', 'http://172.23.56.60:5000/api/data');
 define('CLOUDWATCHER_TIMEOUT', 5); // seconds

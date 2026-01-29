@@ -1,5 +1,6 @@
 -- Weather Aggregator Database Schema
 -- Modified: 2026-01-28 - Initial creation
+-- Modified: 2026-01-29 - Added humidity1, humidity2 for indoor sensors
 --
 -- Run as postgres superuser:
 --   CREATE USER weather_user WITH PASSWORD 'xxx';
@@ -27,6 +28,8 @@ CREATE TABLE IF NOT EXISTS weather_readings (
     solar_radiation REAL,
     temp1_c REAL,           -- Additional sensor: WoZi
     temp2_c REAL,           -- Additional sensor: Therapie
+    humidity1 INTEGER,      -- Indoor humidity sensor 1 (WoZi)
+    humidity2 INTEGER,      -- Indoor humidity sensor 2 (Therapie)
 
     -- CloudWatcher Data
     sky_temp_c REAL,
