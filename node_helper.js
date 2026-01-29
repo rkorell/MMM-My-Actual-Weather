@@ -9,6 +9,7 @@
 // Modified: 2026-01-18, 11:00 - AP 4: Dual weather provider support (WUnderground/OpenMeteo), SunCalc removed, lookup tables
 // Modified: 2026-01-28, 18:00 - AP 46: Switched to Weather-Aggregator API polling, removed PWS server and state machine
 // Modified: 2026-01-28, 20:15 - AP 46: Added Wunderground fallback when aggregator data > 180s old
+// Modified: 2026-01-29, 21:10 - Added WMO codes 4, 10, 11, 68, 69 to WmoToWeatherIcon mapping
 
 const NodeHelper = require("node_helper");
 const fetch = require("node-fetch");
@@ -22,6 +23,9 @@ const WmoToWeatherIcon = {
     1:  ["wi-day-sunny-overcast", "wi-night-partly-cloudy"], // Mainly clear
     2:  ["wi-day-cloudy", "wi-night-cloudy"],            // Partly cloudy
     3:  ["wi-day-cloudy-high", "wi-night-cloudy-high"],  // Overcast
+    4:  ["wi-day-haze", "wi-mist-night"],                // Haze
+    10: ["wi-mist", "wi-mist-night"],                    // Mist
+    11: ["wi-fog", "wi-fog-night"],                      // Shallow fog
     45: ["wi-day-fog", "wi-night-fog"],                  // Fog
     48: ["wi-freezing-fog", "wi-freezing-fog-night"],    // Depositing rime fog
     51: ["wi-drizzle", "wi-drizzle-night"],              // Light drizzle
@@ -34,6 +38,8 @@ const WmoToWeatherIcon = {
     65: ["wi-extreme-rain", "wi-extreme-rain-night"],    // Heavy rain
     66: ["wi-freezing-rain", "wi-freezing-rain-night"],  // Light freezing rain
     67: ["wi-freezing-rain", "wi-freezing-rain-night"],  // Heavy freezing rain
+    68: ["wi-day-sleet", "wi-night-sleet"],              // Sleet light
+    69: ["wi-day-sleet-storm", "wi-night-sleet-storm"],  // Sleet heavy
     71: ["wi-day-snow", "wi-night-snow"],                // Slight snow
     73: ["wi-day-snow", "wi-night-snow"],                // Moderate snow
     75: ["wi-day-snow-wind", "wi-night-snow-wind"],      // Heavy snow

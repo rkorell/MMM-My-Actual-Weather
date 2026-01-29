@@ -3,7 +3,14 @@
 **Autor:** Dr. Ralf Korell
 **Modul:** MMM-My-Actual-Weather
 **Status:** Aktiv
-**Letzte Aktualisierung:** 2026-01-28
+**Letzte Aktualisierung:** 2026-01-29
+
+---
+
+## Verwandte Dokumentation
+
+- [README.md](README.md) - Modul-Dokumentation (öffentlich, für GitHub)
+- [WMO_Ableitungsmoeglichkeiten.md](weather-aggregator/docs/WMO_Ableitungsmoeglichkeiten.md) - Detaillierte WMO-Ableitungslogik
 
 ---
 
@@ -112,21 +119,29 @@ sensor2Name: "WoZi",
 
 ## WMO-Code Ableitung (im Aggregator)
 
-Der Aggregator leitet WMO-Codes lokal aus Sensordaten ab:
+Der Aggregator leitet WMO-Codes lokal aus Sensordaten ab. Detaillierte Dokumentation: [WMO_Ableitungsmoeglichkeiten.md](weather-aggregator/docs/WMO_Ableitungsmoeglichkeiten.md)
 
 | Bedingung | WMO Code | Ableitung |
 |-----------|----------|-----------|
 | Clear | 0 | Delta > 25°C |
-| Mainly Clear | 1 | Delta > 20°C |
-| Partly Cloudy | 2 | Delta > 15°C |
-| Overcast | 3 | Delta ≤ 15°C |
-| Fog | 45 | Spread < 2.5 AND Humidity > 95% AND Delta < 10 |
-| Drizzle | 51, 53, 55 | precip_rate gering |
+| Mainly Clear | 1 | Delta > 18°C |
+| Partly Cloudy | 2 | Delta > 8°C |
+| Overcast | 3 | Delta ≤ 8°C |
+| Haze | 4 | Humidity < 60%, Delta > 15 |
+| Mist | 10 | Spread < 2.0, Humidity 90-97% |
+| Shallow Fog | 11 | Temp ≤ Dewpoint, Wind < 1 m/s |
+| Fog | 45 | Spread < 1.0, Humidity > 97%, Delta < 5 |
+| Rime Fog | 48 | Fog + Temp < 0°C |
+| Drizzle | 51, 53, 55 | precip_rate < 0.2 mm/h |
+| Freezing Drizzle | 56, 57 | Drizzle + Temp < 0.5°C |
 | Rain | 61, 63, 65 | precip_rate nach Intensität |
-| Freezing Rain | 66, 67 | Rain + Temp < 0°C |
-| Snow | 71, 73, 75 | Niederschlag + Temp < 2°C |
+| Freezing Rain | 66, 67 | Rain + Temp < 0.5°C |
+| Sleet | 68, 69 | Niederschlag + Temp 1-3°C |
+| Snow | 71, 73, 75 | Niederschlag + Temp < 1°C |
+| Snow Grains | 77 | Rate < 0.2 mm/h + Temp < -2°C |
 
 **Delta** = Außentemperatur - Sky-Temperatur (CloudWatcher IR-Sensor)
+**Spread** = Außentemperatur - Taupunkt
 
 ---
 

@@ -1,7 +1,17 @@
 # WMO-Code Ableitung aus Sensordaten
 
 **Erstellt:** 2026-01-29
+**Letzte Aktualisierung:** 2026-01-29
 **Zweck:** Dokumentation der Möglichkeiten zur lokalen WMO-Wettercode-Ableitung aus PWS- und CloudWatcher-Sensordaten.
+
+---
+
+## Verwandte Dokumentation
+
+- [README.md](../../README.md) - Modul-Dokumentation (öffentlich)
+- [My-Actual-Weather-Projekt-Doku.md](../../My-Actual-Weather-Projekt-Doku.md) - Projektdokumentation (intern)
+- [config.php](../config.php) - Aktuelle Schwellwerte
+- [wmo_derivation.php](../wmo_derivation.php) - Implementierung
 
 ---
 
@@ -148,6 +158,32 @@ Nieselregen = Sehr feine Tröpfchen, geringe Intensität.
 
 **Profi-Trick "Dry Rain":** CloudWatcher erkennt Niederschlag BEVOR die PWS-Wippe kippt! Nutze `is_raining` für sofortige Reaktion.
 
+#### Implementierung: Dual-Sensor-Logik
+
+Die Kombination beider Regensensoren ermöglicht sowohl frühe Erkennung als auch Intensitätsmessung:
+
+```php
+// Niederschlagserkennung: OR-Logik
+$is_precipitating = ($precip_rate > 0) || $cw_is_raining;
+
+// Nieselregen-Unterscheidung: AND-Logik
+$is_drizzle = $cw_is_raining && ($precip_rate < DRIZZLE_MAX);
+```
+
+| Szenario | PWS rate | CW is_raining | Ergebnis |
+|----------|----------|---------------|----------|
+| Kein Regen | 0 | false | Kein Niederschlag |
+| Sehr feiner Niesel | 0 | true | **Drizzle** (CW erkennt früher!) |
+| Leichter Niesel | 0.1 | true | **Drizzle** |
+| Leichter Regen | 1.0 | true | Rain slight |
+| Starker Regen | 8.0 | true | Rain heavy |
+| PWS-only (selten) | 1.0 | false | Rain slight |
+
+**Vorteile dieser Kombination:**
+- **Früherkennung:** CloudWatcher reagiert sofort auf feinste Tröpfchen
+- **Intensitätsmessung:** PWS-Wippe liefert quantitative Rate (mm/h)
+- **Niesel-Unterscheidung:** CW meldet Regen, PWS registriert kaum etwas → Drizzle
+
 ---
 
 ### Codes 60-69: Regen (Rain)
@@ -162,7 +198,7 @@ Nieselregen = Sehr feine Tröpfchen, geringe Intensität.
 | 68 | Schneeregen leicht | beliebig | 1.0 - 3.0°C |
 | 69 | Schneeregen stark | > 2.5 | 1.0 - 3.0°C |
 
-**Wichtig WMO 68 (Schneeregen):** Aktuell NICHT implementiert! Tritt auf bei Temperaturen knapp über dem Gefrierpunkt.
+**WMO 68/69 (Schneeregen):** Jetzt implementiert! Tritt auf bei Temperaturen 1-3°C (knapp über dem Gefrierpunkt).
 
 ---
 
@@ -176,6 +212,29 @@ Nieselregen = Sehr feine Tröpfchen, geringe Intensität.
 | 77 | Schneegriesel | < 0.2 | < -2.0°C |
 
 **Profi-Trick "Winter-Schnee":** CloudWatcher erkennt Schnee über den Heizsensor (braucht Energie zum Schmelzen). PWS-Wippe versagt oft bei Schnee!
+
+#### Implementierung: Schnee-Erkennung mit CloudWatcher
+
+Der CloudWatcher hat einen **beheizten Regensensor**:
+- Beheizte Oberfläche hält Sensor frei von Eis/Schnee
+- Wenn Schnee/Eis auf den Sensor fällt → Schmelzenergie wird benötigt → Frequenzänderung (`rain_freq`)
+- CloudWatcher setzt `is_raining = true` (auch bei Schnee!)
+
+**Problem PWS-Wippe bei Schnee:**
+- PWS misst Niederschlag volumetrisch über Kippwippe
+- Bei Schnee: Wippe kann verstopfen, Schnee schmilzt nicht schnell genug
+- `precip_rate_mm` ist bei Schnee oft **unzuverlässig niedrig**
+
+**Lösung durch Dual-Sensor-Logik:**
+```php
+$is_precipitating = ($precip_rate > 0) || $cw_is_raining;
+```
+→ Wenn PWS-Wippe bei Schnee versagt, erkennt CloudWatcher trotzdem Niederschlag!
+
+**Schnee vs. Regen Unterscheidung:**
+- Erfolgt ausschließlich über **Temperatur** (nicht über Sensortyp)
+- temp < 1°C + Niederschlag erkannt → **Schnee** (WMO 71/73/75)
+- temp < -2°C + sehr geringe Rate → **Schneegriesel** (WMO 77)
 
 ---
 
@@ -260,27 +319,43 @@ Bedingung:
 
 ### ✅ Implementiert (wmo_derivation.php)
 
-- WMO 00-03: Bewölkung nach Delta (25/20/15)
-- WMO 45: Nebel (spread < 2.5, humidity > 95%, delta < 10)
-- WMO 51, 53, 55: Nieselregen
-- WMO 56: Gefrierender Niesel leicht
-- WMO 61, 63, 65: Regen nach Intensität
-- WMO 66: Gefrierender Regen
-- WMO 71, 73, 75: Schnee (temp < 2°C)
+**Bewölkung (mit optimierten Delta-Schwellen 25/18/8):**
+- WMO 00: Wolkenlos (delta > 25°C)
+- WMO 01: Überwiegend klar (delta > 18°C)
+- WMO 02: Teilweise bewölkt (delta > 8°C)
+- WMO 03: Bedeckt (delta ≤ 8°C)
 
-### ❌ Noch nicht implementiert
+**Dunst/Nebel (mit strikten Schwellen):**
+- WMO 04: Dunst (humidity < 60%, delta > 15)
+- WMO 10: Feuchter Dunst (spread < 2.0, humidity 90-97%)
+- WMO 11: Flacher Bodennebel (temp ≤ dewpoint, wind < 1 m/s, humidity > 95%)
+- WMO 45: Nebel (spread < 1.0, humidity > 97%, delta < 5)
+- WMO 48: Reifnebel (Nebelbedingungen + temp < 0°C)
+- **Fog VETO:** spread > 3.0 → kein Nebel möglich
 
-**Einfach (keine Zeitreihen nötig):**
-- WMO 04: Dunst (humidity < 60%, delta hoch)
-- WMO 10: Feuchter Dunst (spread < 2, humidity 90-98%)
-- WMO 11: Flacher Bodennebel (temp < dewpoint, wind < 1)
-- WMO 48: Reifnebel (Nebel + temp < 0)
-- WMO 57: Gefrierender Niesel stark
-- WMO 67: Gefrierender Regen stark
-- WMO 68/69: Schneeregen (temp 1-3°C)
-- WMO 77: Schneegriesel (temp < -2°C, rate minimal)
-- Striktere Nebel-Schwellen (spread < 1.0, humidity > 97%)
-- Feinere Delta-Schwellen (25/18/8/5)
+**Nieselregen:**
+- WMO 51: Niesel leicht (rate < 0.2 mm/h, temp ≥ 3°C)
+- WMO 53: Niesel mäßig
+- WMO 55: Niesel stark
+- WMO 56: Gefrierender Niesel leicht (temp < 0.5°C)
+- WMO 57: Gefrierender Niesel stark (temp < 0.5°C, humidity > 95%)
+
+**Regen:**
+- WMO 61: Regen leicht (rate < 2.5 mm/h)
+- WMO 63: Regen mäßig (rate < 7.5 mm/h)
+- WMO 65: Regen stark (rate ≥ 7.5 mm/h)
+- WMO 66: Gefrierender Regen leicht (temp < 0.5°C)
+- WMO 67: Gefrierender Regen stark (temp < 0.5°C, rate ≥ 2.5 mm/h)
+- WMO 68: Schneeregen leicht (temp 1-3°C, rate < 2.5 mm/h)
+- WMO 69: Schneeregen stark (temp 1-3°C, rate ≥ 2.5 mm/h)
+
+**Schnee:**
+- WMO 71: Schnee leicht (temp < 1°C, rate < 2.5 mm/h)
+- WMO 73: Schnee mäßig (temp < 1°C, rate < 7.5 mm/h)
+- WMO 75: Schnee stark (temp < 1°C, rate ≥ 7.5 mm/h)
+- WMO 77: Schneegriesel (temp < -2°C, rate < 0.2 mm/h)
+
+### 🔄 Noch nicht implementiert
 
 **Komplex (Zeitreihen-Analyse nötig):**
 - WMO 80-86: Schauer (Varianz über 10-15 Min)
@@ -297,45 +372,283 @@ Bedingung:
 
 ## Schwellwerte (config.php)
 
-### Aktuelle Werte
+### Aktuelle Werte (Stand 2026-01-29)
 
 ```php
-define('THRESHOLD_CLEAR', 25);         // delta > 25 = klar
-define('THRESHOLD_MAINLY_CLEAR', 20);  // delta > 20 = überwiegend klar
-define('THRESHOLD_PARTLY_CLOUDY', 15); // delta > 15 = teilweise bewölkt
+// Bewölkungs-Schwellen (optimiert)
+define('THRESHOLD_CLEAR', 25);         // delta > 25 = klar (WMO 0)
+define('THRESHOLD_MAINLY_CLEAR', 18);  // delta > 18 = überwiegend klar (WMO 1)
+define('THRESHOLD_PARTLY_CLOUDY', 8);  // delta > 8 = teilweise bewölkt (WMO 2)
+                                       // delta ≤ 8 = bedeckt (WMO 3)
 
+// Niederschlags-Intensität
+define('DRIZZLE_MAX', 0.2);            // < 0.2 mm/h = Niesel
 define('RAIN_LIGHT_MAX', 2.5);         // < 2.5 mm/h = leicht
-define('RAIN_MODERATE_MAX', 7.5);      // < 7.5 mm/h = mäßig
+define('RAIN_MODERATE_MAX', 7.5);      // < 7.5 mm/h = mäßig, >= 7.5 = stark
 
-define('FOG_SPREAD_MAX', 2.5);         // spread < 2.5
-define('FOG_HUMIDITY_MIN', 95);        // humidity > 95%
-define('FOG_DELTA_MAX', 10);           // delta < 10
+// Nebel-Erkennung (strikt)
+define('FOG_SPREAD_MAX', 1.0);         // spread < 1.0
+define('FOG_HUMIDITY_MIN', 97);        // humidity > 97%
+define('FOG_DELTA_MAX', 5);            // delta < 5
+define('FOG_SPREAD_VETO', 3.0);        // spread > 3.0 → KEIN Nebel
 
-define('SNOW_TEMP_MAX', 2.0);          // temp < 2 = Schnee
-define('FREEZING_TEMP_MAX', 0.0);      // temp < 0 = gefrierend
+// Feuchter Dunst (WMO 10)
+define('MIST_SPREAD_MAX', 2.0);        // spread < 2.0
+define('MIST_HUMIDITY_MIN', 90);       // humidity > 90%
+define('MIST_HUMIDITY_MAX', 97);       // humidity < 97% (sonst Nebel)
+
+// Flacher Bodennebel (WMO 11)
+define('SHALLOW_FOG_WIND_MAX', 1.0);   // wind < 1 m/s
+
+// Dunst (WMO 04)
+define('HAZE_HUMIDITY_MAX', 60);       // humidity < 60%
+define('HAZE_DELTA_MIN', 15);          // delta > 15
+
+// Temperatur-Schwellen
+define('SNOW_TEMP_MAX', 1.0);          // temp < 1°C = Schnee
+define('SLEET_TEMP_MIN', 1.0);         // temp >= 1°C = Schneeregen möglich
+define('SLEET_TEMP_MAX', 3.0);         // temp < 3°C = Schneeregen
+define('FREEZING_TEMP_MAX', 0.5);      // temp < 0.5°C = gefrierend
+define('SNOW_GRAINS_TEMP', -2.0);      // temp < -2°C = Schneegriesel möglich
 ```
 
-### Empfohlene Optimierungen
+---
 
+---
+
+## Entscheidungsbaum (Implementierung)
+
+Die WMO-Ableitung in `wmo_derivation.php` ist ein **prioritätsbasierter Entscheidungsbaum**:
+
+```
+derive_wmo_code($pws, $cw)
+│
+│   Eingabe: temp, humidity, dewpoint, precip_rate, wind_speed (PWS)
+│            sky_temp, is_raining (CloudWatcher)
+│   Berechnet: delta = temp - sky_temp
+│              spread = temp - dewpoint
+│
+├─► 1. NIEDERSCHLAG? (höchste Priorität)
+│   │
+│   │   $is_precipitating = ($precip_rate > 0) || $cw_is_raining
+│   │
+│   └─► JA → derive_precipitation_code()
+│            │
+│            │   $is_drizzle = $cw_is_raining && ($precip_rate < 0.2)
+│            │
+│            ├─► temp < 0.5°C? ──────────────────► FREEZING
+│            │       │
+│            │       ├─► rate < 0.2?
+│            │       │       ├─► humidity > 95%? → 57 (freezing drizzle dense)
+│            │       │       └─► else            → 56 (freezing drizzle light)
+│            │       │
+│            │       └─► rate >= 0.2?
+│            │               ├─► rate >= 2.5?    → 67 (freezing rain heavy)
+│            │               └─► rate < 2.5?     → 66 (freezing rain light)
+│            │
+│            ├─► temp < 1.0°C? ──────────────────► SNOW
+│            │       │
+│            │       ├─► rate < 0.2 && temp < -2°C? → 77 (snow grains)
+│            │       ├─► rate < 2.5?                → 71 (snow slight)
+│            │       ├─► rate < 7.5?                → 73 (snow moderate)
+│            │       └─► rate >= 7.5?               → 75 (snow heavy)
+│            │
+│            ├─► temp 1.0-3.0°C? ────────────────► SLEET
+│            │       │
+│            │       ├─► rate < 2.5?  → 68 (sleet light)
+│            │       └─► rate >= 2.5? → 69 (sleet heavy)
+│            │
+│            └─► temp >= 3.0°C? ─────────────────► RAIN/DRIZZLE
+│                    │
+│                    ├─► $is_drizzle?     → 51 (drizzle light)
+│                    ├─► rate < 0.2?      → 51 (drizzle light)
+│                    ├─► rate < 2.5?      → 61 (rain slight)
+│                    ├─► rate < 7.5?      → 63 (rain moderate)
+│                    └─► rate >= 7.5?     → 65 (rain heavy)
+│
+├─► 2. NEBEL/DUNST? (nur wenn KEIN Niederschlag)
+│   │
+│   │   derive_fog_mist_code()
+│   │
+│   ├─► VETO: spread > 3.0? → return null (kein Nebel möglich)
+│   │
+│   ├─► spread < 1.0 && humidity > 97% && delta < 5?
+│   │       │
+│   │       ├─► temp < 0°C? → 48 (depositing rime fog)
+│   │       └─► temp >= 0°C? → 45 (fog)
+│   │
+│   ├─► temp <= dewpoint && wind < 1.0 && humidity > 95%?
+│   │       └─► 11 (shallow fog)
+│   │
+│   └─► spread < 2.0 && humidity 90-97%?
+│           └─► 10 (mist)
+│
+├─► 3. DUNST? (nur wenn KEIN Niederschlag, KEIN Nebel)
+│   │
+│   └─► humidity < 60% && delta > 15?
+│           └─► 4 (haze)
+│
+└─► 4. BEWÖLKUNG (Fallback, immer erreichbar wenn delta verfügbar)
+        │
+        ├─► delta > 25  → 0 (clear)
+        ├─► delta > 18  → 1 (mainly clear)
+        ├─► delta > 8   → 2 (partly cloudy)
+        └─► delta <= 8  → 3 (overcast)
+```
+
+---
+
+## Fehlerquellenanalyse
+
+### ✅ Korrekt implementiert
+
+**Temperatur-Grenzen (disjunkt, lückenlos):**
+| Bereich | Niederschlagsart |
+|---------|------------------|
+| temp < 0.5°C | Freezing (gefrierend) |
+| 0.5 ≤ temp < 1.0°C | Snow (Schnee) |
+| 1.0 ≤ temp < 3.0°C | Sleet (Schneeregen) |
+| temp ≥ 3.0°C | Rain/Drizzle |
+
+**Grenzwert-Test:**
+- temp = 0.49°C → Freezing ✓
+- temp = 0.50°C → Snow ✓ (nicht mehr Freezing)
+- temp = 0.99°C → Snow ✓
+- temp = 1.00°C → Sleet ✓ (nicht mehr Snow)
+- temp = 2.99°C → Sleet ✓
+- temp = 3.00°C → Rain ✓ (nicht mehr Sleet)
+
+**Niederschlagsintensität (disjunkt, lückenlos):**
+| Rate (mm/h) | Intensität |
+|-------------|------------|
+| < 0.2 | Drizzle/Niesel |
+| 0.2 - 2.5 | Light/Leicht |
+| 2.5 - 7.5 | Moderate/Mäßig |
+| ≥ 7.5 | Heavy/Stark |
+
+**Mist vs Fog Luftfeuchtigkeit (disjunkt):**
+- Mist: 90% < humidity ≤ 97%
+- Fog: humidity > 97%
+
+---
+
+### ⚠️ Potenzielle Probleme
+
+#### Problem 1: Shallow Fog (11) wird praktisch nie erreicht
+
+**Situation:** Die Prüfung für Fog (45) kommt VOR Shallow Fog (11).
+
+**Bedingungen:**
+- Fog (45): spread < 1.0 && humidity > 97% && delta < 5
+- Shallow Fog (11): temp ≤ dewpoint && wind < 1.0 && humidity > 95%
+
+**Problem:** `temp ≤ dewpoint` bedeutet `spread ≤ 0`, was auch `spread < 1.0` erfüllt.
+Wenn also Shallow-Fog-Bedingungen erfüllt sind UND humidity > 97%, wird Fog (45) erkannt.
+
+**Konsequenz:** Shallow Fog wird nur erkannt bei:
+- temp ≤ dewpoint (spread ≤ 0)
+- wind < 1.0 m/s
+- humidity 95-97% (NICHT > 97%, sonst Fog)
+
+**Bewertung:** ⚠️ Eingeschränkte Erkennung, aber nicht falsch. Echter flacher Bodennebel bei Windstille mit sehr hoher Feuchtigkeit wird als normaler Nebel klassifiziert.
+
+**Mögliche Korrektur:** Shallow Fog VOR Fog prüfen, oder Wind-Bedingung in Fog aufnehmen.
+
+---
+
+#### Problem 2: Snow Grains (77) zu restriktiv
+
+**Bedingung:** `rate < 0.2 && temp < -2.0°C`
+
+**Problem:** Schneegriesel ist meteorologisch definiert als sehr kleine Eiskörner bei sehr kalter Temperatur. Die aktuelle Implementierung erfordert BEIDE:
+- Sehr geringe Rate (< 0.2 mm/h)
+- Sehr kalt (< -2°C)
+
+**Konsequenz:** Bei temp = -5°C und rate = 0.5 mm/h → Snow slight (71), nicht Snow grains (77)
+
+**Bewertung:** ⚠️ Möglicherweise korrekt - Schneegriesel ist per Definition sehr leicht. Bei höherer Intensität ist es normaler Schneefall.
+
+---
+
+#### Problem 3: Freezing Drizzle dense (57) Kriterium fragwürdig
+
+**Code:**
 ```php
-// Feinere Bewölkungs-Schwellen
-define('THRESHOLD_CLEAR', 25);
-define('THRESHOLD_MAINLY_CLEAR', 18);  // war 20
-define('THRESHOLD_PARTLY_CLOUDY', 8);  // war 15
-define('THRESHOLD_OVERCAST', 5);       // NEU
-
-// Striktere Nebel-Erkennung
-define('FOG_SPREAD_MAX', 1.0);         // war 2.5
-define('FOG_HUMIDITY_MIN', 97);        // war 95
-define('FOG_DELTA_MAX', 5);            // war 10
-
-// Neue Schwellen
-define('MIST_SPREAD_MAX', 2.0);        // NEU für WMO 10
-define('MIST_HUMIDITY_MIN', 90);       // NEU
-define('SLEET_TEMP_MIN', 1.0);         // NEU für Schneeregen
-define('SLEET_TEMP_MAX', 3.0);         // NEU
-define('SNOW_GRAINS_TEMP', -2.0);      // NEU für WMO 77
+if ($precip_rate < DRIZZLE_MAX && $humidity > 95) {
+    return 57;  // freezing drizzle, dense
+} else {
+    return 56;  // freezing drizzle, light
+}
 ```
+
+**Problem:** Warum bestimmt Luftfeuchtigkeit > 95% die Dichte des Nieselregens?
+
+**Meteorologisch:** Dichte (dense) bezieht sich auf die Tropfendichte/Sichtweite, nicht auf Luftfeuchtigkeit.
+
+**Bewertung:** ⚠️ Fragwürdige Logik. Könnte vereinfacht werden zu nur WMO 56 (light), da rate < 0.2 per Definition leicht ist.
+
+---
+
+#### Problem 4: Kein WMO 53/55 (Drizzle moderate/dense)
+
+**Aktuell:** Bei temp ≥ 3°C wird unterschieden:
+- rate < 0.2 → 51 (drizzle light)
+- rate ≥ 0.2 → 61/63/65 (rain)
+
+**Problem:** WMO 53 (drizzle moderate) und WMO 55 (drizzle dense) werden nie verwendet.
+
+**Bewertung:** ⚠️ Feature-Lücke. Nieselregen wird nur als "light" erkannt, stärkerer Niesel wird als Regen klassifiziert.
+
+**Mögliche Korrektur:**
+```php
+if ($is_drizzle || $precip_rate < 0.2) {
+    return 51;  // light
+} elseif ($precip_rate < 0.5) {
+    return 53;  // moderate
+} elseif ($precip_rate < 1.0) {
+    return 55;  // dense
+} else {
+    return 61;  // rain slight
+}
+```
+
+---
+
+#### Problem 5: Delta kann null sein
+
+**Situation:** Wenn CloudWatcher keine Daten liefert, ist `sky_temp = null` und damit `delta = null`.
+
+**Konsequenz:**
+- Fog-Erkennung schlägt fehl (delta < 5 nicht prüfbar)
+- Haze-Erkennung schlägt fehl (delta > 15 nicht prüfbar)
+- Cloud-Cover-Fallback schlägt fehl
+
+**Ergebnis:** `wmo_code = null` wird zurückgegeben.
+
+**Bewertung:** ⚠️ Bei CloudWatcher-Ausfall keine WMO-Ableitung möglich. Könnte Fallback auf reine PWS-Daten implementieren (z.B. nur Niederschlag/Temperatur).
+
+---
+
+#### Problem 6: Niederschlag bei Nebel nicht möglich
+
+**Priorität:** Niederschlag wird VOR Nebel geprüft.
+
+**Problem:** Nebel MIT leichtem Niederschlag (z.B. Sprühregen im Nebel) wird als Drizzle klassifiziert, nicht als Nebel.
+
+**Bewertung:** ✅ Meteorologisch korrekt - WMO-Codes sind disjunkt, Niederschlag hat Vorrang.
+
+---
+
+### Zusammenfassung Fehlerquellen
+
+| # | Problem | Schwere | Status |
+|---|---------|---------|--------|
+| 1 | Shallow Fog selten erkannt | Niedrig | ⚠️ Akzeptabel |
+| 2 | Snow Grains restriktiv | Niedrig | ⚠️ Wahrscheinlich korrekt |
+| 3 | Freezing Drizzle dense Logik | Niedrig | ⚠️ Überdenken |
+| 4 | Kein Drizzle moderate/dense | Mittel | ⚠️ Feature-Lücke |
+| 5 | Delta null → kein WMO | Mittel | ⚠️ Fallback fehlt |
+| 6 | Niederschlag vor Nebel | - | ✅ Korrekt |
 
 ---
 
@@ -352,3 +665,4 @@ define('SNOW_GRAINS_TEMP', -2.0);      // NEU für WMO 77
 | Datum | Änderung |
 |-------|----------|
 | 2026-01-29 | Initiale Erstellung der Dokumentation |
+| 2026-01-29 | Implementierung WMO 04, 10, 11, 48, 57, 67, 68, 69, 77; strikte Nebel-Schwellen; optimierte Delta-Schwellen |

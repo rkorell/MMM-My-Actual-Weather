@@ -7,6 +7,7 @@
  * Modified: 2026-01-28 - Initial creation
  * Modified: 2026-01-29 - Added indoor humidity, pressure, dewpoint display
  * Modified: 2026-01-29 - Added weather icons and German condition names
+ * Modified: 2026-01-29 - Added icon mappings for WMO 4, 10, 11, 68, 69
  */
 
 require_once __DIR__ . '/db_connect.php';
@@ -68,6 +69,9 @@ $wmoToIcon = [
     1  => ['wsymbol_0002_sunny_intervals.png', 'wsymbol_0041_partly_cloudy_night.png'],
     2  => ['wsymbol_0043_mostly_cloudy.png', 'wsymbol_0042_cloudy_night.png'],
     3  => ['wsymbol_0003_white_cloud.png', 'wsymbol_0042_cloudy_night.png'],
+    4  => ['wsymbol_0005_hazy_sun.png', 'wsymbol_0063_mist_night.png'],           // Haze
+    10 => ['wsymbol_0006_mist.png', 'wsymbol_0063_mist_night.png'],               // Mist
+    11 => ['wsymbol_0007_fog.png', 'wsymbol_0064_fog_night.png'],                 // Shallow fog
     45 => ['wsymbol_0007_fog.png', 'wsymbol_0064_fog_night.png'],
     48 => ['wsymbol_0047_freezing_fog.png', 'wsymbol_0065_freezing_fog_night.png'],
     51 => ['wsymbol_0048_drizzle.png', 'wsymbol_0066_drizzle_night.png'],
@@ -80,6 +84,8 @@ $wmoToIcon = [
     65 => ['wsymbol_0051_extreme_rain.png', 'wsymbol_0069_extreme_rain_night.png'],
     66 => ['wsymbol_0050_freezing_rain.png', 'wsymbol_0068_freezing_rain_night.png'],
     67 => ['wsymbol_0050_freezing_rain.png', 'wsymbol_0068_freezing_rain_night.png'],
+    68 => ['wsymbol_0013_sleet_showers.png', 'wsymbol_0029_sleet_showers_night.png'],           // Sleet light
+    69 => ['wsymbol_0087_heavy_sleet_showers.png', 'wsymbol_0088_heavy_sleet_showers_night.png'], // Sleet heavy
     71 => ['wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png'],
     73 => ['wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png'],
     75 => ['wsymbol_0053_blowing_snow.png', 'wsymbol_0028_heavy_snow_showers_night.png'],
@@ -102,6 +108,9 @@ $conditionDE = [
     'mainly_clear' => 'Überwiegend klar',
     'partly_cloudy' => 'Teilweise bewölkt',
     'overcast' => 'Bedeckt',
+    'haze' => 'Dunst',
+    'mist' => 'Feuchter Dunst',
+    'shallow_fog' => 'Flacher Bodennebel',
     'fog' => 'Nebel',
     'depositing_rime_fog' => 'Reifnebel',
     'drizzle_light' => 'Leichter Nieselregen',
@@ -114,9 +123,12 @@ $conditionDE = [
     'rain_heavy' => 'Starkregen',
     'freezing_rain_light' => 'Gefrierender Regen',
     'freezing_rain_heavy' => 'Starker gefr. Regen',
+    'sleet_light' => 'Leichter Schneeregen',
+    'sleet_heavy' => 'Schneeregen',
     'snow_slight' => 'Leichter Schneefall',
     'snow_moderate' => 'Schneefall',
     'snow_heavy' => 'Starker Schneefall',
+    'snow_grains' => 'Schneegriesel',
     'rain_showers_slight' => 'Leichte Schauer',
     'rain_showers_moderate' => 'Regenschauer',
     'rain_showers_violent' => 'Heftige Schauer',

@@ -12,6 +12,11 @@ MagicMirror² module displaying weather data from a Personal Weather Station (PW
 - **Temperature Color Gradient**: Temperature-dependent color display (configurable)
 - **Day/Night Icons**: Automatic weather icon adjustment based on CloudWatcher daylight detection
 
+## Documentation
+
+- [Project Documentation](My-Actual-Weather-Projekt-Doku.md) - Internal project documentation (German)
+- [WMO Code Derivation](weather-aggregator/docs/WMO_Ableitungsmoeglichkeiten.md) - Detailed WMO weather code derivation logic (German)
+
 ## Architecture
 
 ```
@@ -156,19 +161,26 @@ tempColorGradient: [
 
 ## WMO Weather Code Derivation
 
-The weather aggregator derives WMO codes locally from sensor data:
+The weather aggregator derives WMO codes locally from sensor data. For detailed derivation logic, see [WMO_Ableitungsmoeglichkeiten.md](weather-aggregator/docs/WMO_Ableitungsmoeglichkeiten.md).
 
 | Condition | WMO Code | Derivation |
 |-----------|----------|------------|
 | Clear | 0 | Delta > 25°C |
-| Mainly Clear | 1 | Delta > 20°C |
-| Partly Cloudy | 2 | Delta > 15°C |
-| Overcast | 3 | Delta ≤ 15°C |
-| Fog | 45 | Spread < 2.5°C AND Humidity > 95% AND Delta < 10°C |
-| Drizzle | 51, 53, 55 | Low precipitation rate |
+| Mainly Clear | 1 | Delta > 18°C |
+| Partly Cloudy | 2 | Delta > 8°C |
+| Overcast | 3 | Delta ≤ 8°C |
+| Haze | 4 | Humidity < 60% AND Delta > 15°C |
+| Mist | 10 | Spread < 2°C AND Humidity 90-97% |
+| Shallow Fog | 11 | Temp ≤ Dewpoint AND Wind < 1 m/s |
+| Fog | 45 | Spread < 1°C AND Humidity > 97% AND Delta < 5°C |
+| Rime Fog | 48 | Fog conditions AND Temp < 0°C |
+| Drizzle | 51, 53, 55 | Precip rate < 0.2 mm/h |
+| Freezing Drizzle | 56, 57 | Drizzle AND Temp < 0.5°C |
 | Rain | 61, 63, 65 | Precipitation rate by intensity |
-| Freezing Rain | 66, 67 | Rain + Temp < 0°C |
-| Snow | 71, 73, 75 | Precipitation + Temp < 2°C |
+| Freezing Rain | 66, 67 | Rain AND Temp < 0.5°C |
+| Sleet | 68, 69 | Precipitation AND Temp 1-3°C |
+| Snow | 71, 73, 75 | Precipitation AND Temp < 1°C |
+| Snow Grains | 77 | Precip < 0.2 mm/h AND Temp < -2°C |
 
 **Delta** = Ambient temperature - Sky temperature (from CloudWatcher IR sensor)
 

@@ -6,6 +6,7 @@
  * NO credentials here - those go in db_connect.php
  *
  * Modified: 2026-01-28 - Initial creation
+ * Modified: 2026-01-29 - Added thresholds for WMO 04, 10, 11, 48, 57, 67, 68, 77
  */
 
 // Station location
@@ -19,22 +20,39 @@ define('CLOUDWATCHER_TIMEOUT', 5); // seconds
 
 // Cloud condition thresholds (delta = ambient - sky temperature)
 define('THRESHOLD_CLEAR', 25);         // delta > 25 = clear (WMO 0)
-define('THRESHOLD_MAINLY_CLEAR', 20);  // delta > 20 = mainly clear (WMO 1)
-define('THRESHOLD_PARTLY_CLOUDY', 15); // delta > 15 = partly cloudy (WMO 2)
-// delta <= 15 = overcast (WMO 3)
+define('THRESHOLD_MAINLY_CLEAR', 18);  // delta > 18 = mainly clear (WMO 1)
+define('THRESHOLD_PARTLY_CLOUDY', 8);  // delta > 8 = partly cloudy (WMO 2)
+// delta <= 8 = overcast (WMO 3)
 
-// Rain intensity thresholds (mm/h)
-define('RAIN_LIGHT_MAX', 2.5);    // < 2.5 = light
+// Rain/Drizzle intensity thresholds (mm/h)
+define('DRIZZLE_MAX', 0.2);       // < 0.2 = drizzle (very fine drops)
+define('RAIN_LIGHT_MAX', 2.5);    // < 2.5 = light rain
 define('RAIN_MODERATE_MAX', 7.5); // < 7.5 = moderate, >= 7.5 = heavy
 
-// Fog detection
-define('FOG_SPREAD_MAX', 2.5);     // temp - dewpoint < 2.5
-define('FOG_HUMIDITY_MIN', 95);    // humidity > 95%
-define('FOG_DELTA_MAX', 10);       // delta < 10 (low clouds/fog)
+// Fog detection (strict thresholds)
+define('FOG_SPREAD_MAX', 1.0);     // temp - dewpoint < 1.0
+define('FOG_HUMIDITY_MIN', 97);    // humidity > 97%
+define('FOG_DELTA_MAX', 5);        // delta < 5 (low clouds/fog)
+define('FOG_SPREAD_VETO', 3.0);    // spread > 3.0 = cannot be fog
 
-// Snow temperature threshold
-define('SNOW_TEMP_MAX', 2.0);      // temp < 2 = snow instead of rain
-define('FREEZING_TEMP_MAX', 0.0);  // temp < 0 = freezing rain/drizzle
+// Mist detection (WMO 10) - less strict than fog
+define('MIST_SPREAD_MAX', 2.0);    // temp - dewpoint < 2.0
+define('MIST_HUMIDITY_MIN', 90);   // humidity > 90%
+define('MIST_HUMIDITY_MAX', 97);   // humidity < 97% (else fog)
+
+// Shallow fog (WMO 11)
+define('SHALLOW_FOG_WIND_MAX', 1.0); // wind < 1 m/s
+
+// Haze detection (WMO 04)
+define('HAZE_HUMIDITY_MAX', 60);   // humidity < 60%
+define('HAZE_DELTA_MIN', 15);      // delta > 15 (no thick clouds)
+
+// Snow/Sleet temperature thresholds
+define('SNOW_TEMP_MAX', 1.0);      // temp < 1 = snow
+define('SLEET_TEMP_MIN', 1.0);     // temp >= 1 = sleet possible
+define('SLEET_TEMP_MAX', 3.0);     // temp < 3 = sleet (snow/rain mix)
+define('FREEZING_TEMP_MAX', 0.5);  // temp < 0.5 = freezing rain/drizzle
+define('SNOW_GRAINS_TEMP', -2.0);  // temp < -2 = snow grains possible
 
 // Dashboard settings
 define('SENSOR1_NAME', 'Therapie');
@@ -46,6 +64,9 @@ define('WMO_CONDITIONS', [
     1 => 'mainly_clear',
     2 => 'partly_cloudy',
     3 => 'overcast',
+    4 => 'haze',
+    10 => 'mist',
+    11 => 'shallow_fog',
     45 => 'fog',
     48 => 'depositing_rime_fog',
     51 => 'drizzle_light',
@@ -58,9 +79,12 @@ define('WMO_CONDITIONS', [
     65 => 'rain_heavy',
     66 => 'freezing_rain_light',
     67 => 'freezing_rain_heavy',
+    68 => 'sleet_light',
+    69 => 'sleet_heavy',
     71 => 'snow_slight',
     73 => 'snow_moderate',
     75 => 'snow_heavy',
+    77 => 'snow_grains',
     80 => 'rain_showers_slight',
     81 => 'rain_showers_moderate',
     82 => 'rain_showers_violent',
