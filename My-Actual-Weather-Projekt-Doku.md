@@ -3,7 +3,7 @@
 **Autor:** Dr. Ralf Korell
 **Modul:** MMM-My-Actual-Weather
 **Status:** Aktiv
-**Letzte Aktualisierung:** 2026-01-30 (AP 47)
+**Letzte Aktualisierung:** 2026-01-30 (AP 50)
 
 ---
 
@@ -183,7 +183,26 @@ Day/Night wird von API geliefert (`is_daylight` bzw. `dayOrNight`)
 | URL | Beschreibung |
 |-----|--------------|
 | `http://172.23.56.196/weather-api/dashboard.php` | Wetter-Übersicht mit Charts |
+| `http://172.23.56.196/weather-api/dashboard.php?tab=feedback` | Feedback-Eingabe (OK/Falsch) |
+| `http://172.23.56.196/weather-api/dashboard.php?tab=analyse` | Feedback-Analyse und Empfehlungen |
 | `http://172.23.56.196/weather-api/dashboard.php?tab=icons` | WMO-Icon-Übersicht (alle Mappings) |
+
+**API-Endpoints:**
+| Endpoint | Methode | Beschreibung |
+|----------|---------|--------------|
+| `api.php?action=current` | GET | Aktuelle Wetterdaten + WMO-Code |
+| `api.php?action=history&hours=24` | GET | Historische Daten |
+| `api.php?action=status` | GET | System-Status |
+| `api.php?action=feedback` | POST | Feedback speichern (`{feedback: bool, correct_wmo: int, comment: string}`) |
+| `api.php?action=feedback_stats` | GET | Feedback-Statistiken und Empfehlungen |
+| `api.php?action=wmo_list` | GET | WMO-Codes sortiert nach Nähe zum aktuellen |
+
+**Feedback-Datenbank-Spalten:**
+| Spalte | Typ | Beschreibung |
+|--------|-----|--------------|
+| `feedback` | BOOLEAN | true = korrekt, false = falsch |
+| `feedback_correct_wmo` | INTEGER | Korrigierter WMO-Code (bei false) |
+| `feedback_comment` | TEXT | Optionaler Kommentar |
 
 ---
 
@@ -241,6 +260,7 @@ curl -X POST "http://172.23.56.196:8000/data/report/" \
 | 44 | 2026-01-25 | CloudWatcher-Integration vorbereitet |
 | 46 | 2026-01-28 | Weather-Aggregator implementiert, PWS-Server entfernt, Wunderground-Fallback |
 | 47 | 2026-01-30 | WMO 55 Icon-Fix, CloudWatcher-Offline-Fallback, Double-Reload-Fix, CSS-Mapping-Korrekturen, Dashboard WMO-Icons-Tab |
+| 50 | 2026-01-30 | Feedback-Mechanismus (OK/Falsch-Buttons, Analyse-Tab, Empfehlungen), Dashboard-Kosmetik (Header, Logo, DB-Größe) |
 
 ---
 

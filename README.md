@@ -251,12 +251,25 @@ The weather aggregator is a separate PHP application that runs on a webserver. S
 
 ### Dashboard
 
-The aggregator includes a web dashboard for monitoring:
+The aggregator includes a web dashboard for monitoring and feedback:
 
 | URL | Description |
 |-----|-------------|
 | `/weather-api/dashboard.php` | Weather overview with 24h charts |
+| `/weather-api/dashboard.php?tab=feedback` | WMO feedback input (OK/Wrong buttons) |
+| `/weather-api/dashboard.php?tab=analyse` | Feedback analysis and threshold recommendations |
 | `/weather-api/dashboard.php?tab=icons` | WMO icon reference (all mappings) |
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `api.php?action=current` | GET | Current weather data with WMO code |
+| `api.php?action=history&hours=24` | GET | Historical data (1-168 hours) |
+| `api.php?action=status` | GET | System status (last update, DB stats) |
+| `api.php?action=feedback` | POST | Save feedback for current reading |
+| `api.php?action=feedback_stats` | GET | Feedback statistics and recommendations |
+| `api.php?action=wmo_list` | GET | WMO codes sorted by proximity to current |
 
 ## Data Flow
 
@@ -320,6 +333,7 @@ curl -s "http://CLOUDWATCHER_IP:5000/api/data" | jq
 
 | Date | Description |
 |------|-------------|
+| 2026-01-30 | Feedback mechanism (OK/Wrong buttons, analysis tab, recommendations), dashboard cosmetics |
 | 2026-01-30 | CloudWatcher offline fallback, WMO icon mapping fixes, Dashboard WMO Icons tab |
 | 2026-01-28 | Switched to Weather-Aggregator architecture |
 | 2026-01-29 | Added dewpoint calculation, pressure QNH, indoor humidity |
