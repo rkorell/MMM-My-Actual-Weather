@@ -3,7 +3,7 @@
 **Autor:** Dr. Ralf Korell
 **Modul:** MMM-My-Actual-Weather
 **Status:** Aktiv
-**Letzte Aktualisierung:** 2026-01-30 (AP 50)
+**Letzte Aktualisierung:** 2026-01-30 (AP 51)
 
 ---
 
@@ -141,11 +141,11 @@ Der Aggregator leitet WMO-Codes lokal aus Sensordaten ab. Detaillierte Dokumenta
 | Fog | 45 | Spread < 1.0, Humidity > 97%, Delta < 5 |
 | Rime Fog | 48 | Fog + Temp < 0°C |
 | Drizzle | 51, 53 | rate < 1.0 mm/h (light < 0.2, moderate 0.2-1.0) |
-| Freezing Drizzle | 56, 57 | rate < 1.0 + Temp < 0.5°C (light < 0.5, dense ≥ 0.5) |
+| Freezing Drizzle | 56, 57 | rate < 1.0 + Temp 0-0.5°C (light < 0.5, dense ≥ 0.5) |
 | Rain | 61, 63, 65 | rate ≥ 1.0 mm/h (slight/moderate/heavy) |
-| Freezing Rain | 66, 67 | Rain + Temp < 0.5°C |
-| Sleet | 68, 69 | Niederschlag + Temp 1-3°C |
-| Snow | 71, 73, 75 | Niederschlag + Temp < 1°C |
+| Freezing Rain | 66, 67 | Hohe Rate nahe 0°C (temp -1 bis 0.5°C, rate ≥ 1.0) |
+| Sleet | 68, 69 | Niederschlag + Temp 1.5-3°C |
+| Snow | 71, 73, 75 | Niederschlag + Temp < 1.5°C (sicher bei < -2°C) |
 | Snow Grains | 77 | Rate < 0.2 mm/h + Temp < -2°C |
 
 **Delta** = Außentemperatur - Sky-Temperatur (CloudWatcher IR-Sensor)
@@ -262,6 +262,7 @@ curl -X POST "http://172.23.56.196:8000/data/report/" \
 | 46 | 2026-01-28 | Weather-Aggregator implementiert, PWS-Server entfernt, Wunderground-Fallback |
 | 47 | 2026-01-30 | WMO 55 Icon-Fix, CloudWatcher-Offline-Fallback, Double-Reload-Fix, CSS-Mapping-Korrekturen, Dashboard WMO-Icons-Tab |
 | 50 | 2026-01-30 | Feedback-Mechanismus (OK/Falsch-Buttons, Analyse-Tab, Empfehlungen), Dashboard-Kosmetik (Header, Logo, DB-Größe) |
+| 51 | 2026-01-30 | WMO-Logik-Fixes: Snow/Freezing umstrukturiert (Schnee Vorrang bei < -2°C), WMO 11 vor WMO 45 |
 
 ---
 

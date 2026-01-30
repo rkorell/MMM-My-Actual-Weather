@@ -175,11 +175,11 @@ The weather aggregator derives WMO codes locally from sensor data. For detailed 
 | Fog | 45 | Spread < 1°C AND Humidity > 97% AND Delta < 5°C |
 | Rime Fog | 48 | Fog conditions AND Temp < 0°C |
 | Drizzle | 51, 53 | Precip rate < 1.0 mm/h (light < 0.2, moderate 0.2-1.0) |
-| Freezing Drizzle | 56, 57 | Drizzle AND Temp < 0.5°C (light < 0.5, dense >= 0.5) |
+| Freezing Drizzle | 56, 57 | Drizzle AND Temp 0-0.5°C (light < 0.5, dense >= 0.5) |
 | Rain | 61, 63, 65 | Precip rate >= 1.0 mm/h (slight/moderate/heavy) |
-| Freezing Rain | 66, 67 | Rain AND Temp < 0.5°C |
-| Sleet | 68, 69 | Precipitation AND Temp 1-3°C |
-| Snow | 71, 73, 75 | Precipitation AND Temp < 1°C |
+| Freezing Rain | 66, 67 | High precip rate near 0°C (temp -1 to 0.5°C, rate >= 1.0) |
+| Sleet | 68, 69 | Precipitation AND Temp 1.5-3°C |
+| Snow | 71, 73, 75 | Precipitation AND Temp < 1.5°C (certain at < -2°C) |
 | Snow Grains | 77 | Precip < 0.2 mm/h AND Temp < -2°C |
 
 **Delta** = Ambient temperature - Sky temperature (from CloudWatcher IR sensor)
@@ -334,6 +334,7 @@ curl -s "http://CLOUDWATCHER_IP:5000/api/data" | jq
 
 | Date | Description |
 |------|-------------|
+| 2026-01-30 | Snow/Freezing logic restructured: snow priority at temp < -2°C, WMO 11 before WMO 45 |
 | 2026-01-30 | Feedback mechanism (OK/Wrong buttons, analysis tab, recommendations), dashboard cosmetics |
 | 2026-01-30 | CloudWatcher offline fallback, WMO icon mapping fixes, Dashboard WMO Icons tab |
 | 2026-01-28 | Switched to Weather-Aggregator architecture |

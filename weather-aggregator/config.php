@@ -8,6 +8,7 @@
  * Modified: 2026-01-28 - Initial creation
  * Modified: 2026-01-29 - Added thresholds for WMO 04, 10, 11, 48, 57, 67, 68, 77
  * Modified: 2026-01-30 - Drizzle thresholds: DRIZZLE_LIGHT_MAX, DRIZZLE_MAX, FREEZING_DRIZZLE_DENSE
+ * Modified: 2026-01-30 - Snow/Freezing logic restructured: SNOW_CERTAIN_TEMP, adjusted SNOW_TEMP_MAX/SLEET_TEMP_MIN
  */
 
 // Station location
@@ -51,10 +52,12 @@ define('HAZE_HUMIDITY_MAX', 60);   // humidity < 60%
 define('HAZE_DELTA_MIN', 15);      // delta > 15 (no thick clouds)
 
 // Snow/Sleet temperature thresholds
-define('SNOW_TEMP_MAX', 1.0);      // temp < 1 = snow
-define('SLEET_TEMP_MIN', 1.0);     // temp >= 1 = sleet possible
+define('SNOW_TEMP_MAX', 1.5);      // temp < 1.5 = snow possible
+define('SNOW_CERTAIN_TEMP', -2.0); // temp < -2 = certainly snow (too cold for liquid)
+define('SLEET_TEMP_MIN', 1.5);     // temp >= 1.5 = sleet possible
 define('SLEET_TEMP_MAX', 3.0);     // temp < 3 = sleet (snow/rain mix)
-define('FREEZING_TEMP_MAX', 0.5);  // temp < 0.5 = freezing rain/drizzle
+define('FREEZING_TEMP_MAX', 0.5);  // temp < 0.5 = freezing drizzle threshold
+define('FREEZING_RAIN_TEMP', -1.0);// temp > -1 = freezing rain possible (with high rate)
 define('SNOW_GRAINS_TEMP', -2.0);  // temp < -2 = snow grains possible
 
 // Dashboard settings

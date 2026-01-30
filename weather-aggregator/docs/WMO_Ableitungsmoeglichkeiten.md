@@ -408,11 +408,13 @@ define('SHALLOW_FOG_WIND_MAX', 1.0);   // wind < 1 m/s
 define('HAZE_HUMIDITY_MAX', 60);       // humidity < 60%
 define('HAZE_DELTA_MIN', 15);          // delta > 15
 
-// Temperatur-Schwellen
-define('SNOW_TEMP_MAX', 1.0);          // temp < 1°C = Schnee
-define('SLEET_TEMP_MIN', 1.0);         // temp >= 1°C = Schneeregen möglich
+// Temperatur-Schwellen (restructured 2026-01-30)
+define('SNOW_TEMP_MAX', 1.5);          // temp < 1.5°C = Schnee möglich
+define('SNOW_CERTAIN_TEMP', -2.0);     // temp < -2°C = sicher Schnee (zu kalt für Flüssigkeit)
+define('SLEET_TEMP_MIN', 1.5);         // temp >= 1.5°C = Schneeregen möglich
 define('SLEET_TEMP_MAX', 3.0);         // temp < 3°C = Schneeregen
-define('FREEZING_TEMP_MAX', 0.5);      // temp < 0.5°C = gefrierend
+define('FREEZING_TEMP_MAX', 0.5);      // temp < 0.5°C = gefrierender Niesel
+define('FREEZING_RAIN_TEMP', -1.0);    // temp > -1°C = gefrierender Regen möglich (bei hoher Rate)
 define('SNOW_GRAINS_TEMP', -2.0);      // temp < -2°C = Schneegriesel möglich
 ```
 
@@ -440,24 +442,29 @@ derive_wmo_code($pws, $cw)
 │            │
 │            │   $is_drizzle = $cw_is_raining && ($precip_rate < 0.2)
 │            │
-│            ├─► temp < 0.5°C? ──────────────────► FREEZING
+│            ├─► temp < 1.5°C? ──────────────────► SNOW ZONE
 │            │       │
-│            │       ├─► rate < 0.2?
-│            │       │       ├─► humidity > 95%? → 57 (freezing drizzle dense)
-│            │       │       └─► else            → 56 (freezing drizzle light)
+│            │       ├─► temp < -2°C? ───────────► CERTAINLY SNOW
+│            │       │       │                     (too cold for liquid)
+│            │       │       └─► derive_snow_code()
 │            │       │
-│            │       └─► rate >= 0.2?
-│            │               ├─► rate >= 2.5?    → 67 (freezing rain heavy)
-│            │               └─► rate < 2.5?     → 66 (freezing rain light)
+│            │       ├─► temp -2°C to 0°C? ──────► PRIMARILY SNOW
+│            │       │       │
+│            │       │       ├─► rate >= 2.5 && temp > -1°C?
+│            │       │       │       └─► derive_freezing_rain_code()
+│            │       │       │           (high rate near 0 = freezing rain)
+│            │       │       │
+│            │       │       └─► else → derive_snow_code()
+│            │       │
+│            │       ├─► temp 0°C to 0.5°C? ─────► FREEZING ZONE
+│            │       │       │
+│            │       │       ├─► rate >= 1.0? → derive_freezing_rain_code()
+│            │       │       └─► rate < 1.0?  → derive_freezing_drizzle_code()
+│            │       │
+│            │       └─► temp 0.5°C to 1.5°C? ───► SNOW
+│            │               └─► derive_snow_code()
 │            │
-│            ├─► temp < 1.0°C? ──────────────────► SNOW
-│            │       │
-│            │       ├─► rate < 0.2 && temp < -2°C? → 77 (snow grains)
-│            │       ├─► rate < 2.5?                → 71 (snow slight)
-│            │       ├─► rate < 7.5?                → 73 (snow moderate)
-│            │       └─► rate >= 7.5?               → 75 (snow heavy)
-│            │
-│            ├─► temp 1.0-3.0°C? ────────────────► SLEET
+│            ├─► temp 1.5-3.0°C? ────────────────► SLEET
 │            │       │
 │            │       ├─► rate < 2.5?  → 68 (sleet light)
 │            │       └─► rate >= 2.5? → 69 (sleet heavy)
@@ -466,9 +473,24 @@ derive_wmo_code($pws, $cw)
 │                    │
 │                    ├─► $is_drizzle?     → 51 (drizzle light)
 │                    ├─► rate < 0.2?      → 51 (drizzle light)
+│                    ├─► rate < 1.0?      → 53 (drizzle moderate)
 │                    ├─► rate < 2.5?      → 61 (rain slight)
 │                    ├─► rate < 7.5?      → 63 (rain moderate)
 │                    └─► rate >= 7.5?     → 65 (rain heavy)
+│
+│   derive_snow_code(temp, rate):
+│       ├─► rate < 0.2 && temp < -2°C? → 77 (snow grains)
+│       ├─► rate < 2.5?                → 71 (snow slight)
+│       ├─► rate < 7.5?                → 73 (snow moderate)
+│       └─► rate >= 7.5?               → 75 (snow heavy)
+│
+│   derive_freezing_rain_code(rate):
+│       ├─► rate >= 2.5? → 67 (freezing rain heavy)
+│       └─► rate < 2.5?  → 66 (freezing rain light)
+│
+│   derive_freezing_drizzle_code(rate):
+│       ├─► rate >= 0.5? → 57 (freezing drizzle dense)
+│       └─► rate < 0.5?  → 56 (freezing drizzle light)
 │
 ├─► 2. NEBEL/DUNST? (nur wenn KEIN Niederschlag)
 │   │
@@ -476,13 +498,14 @@ derive_wmo_code($pws, $cw)
 │   │
 │   ├─► VETO: spread > 3.0? → return null (kein Nebel möglich)
 │   │
-│   ├─► spread < 1.0 && humidity > 97% && delta < 5?
-│   │       │
-│   │       ├─► temp < 0°C? → 48 (depositing rime fog)
-│   │       └─► temp >= 0°C? → 45 (fog)
+│   ├─► spread < 1.0 && humidity > 97% && delta < 5 && temp < 0°C?
+│   │       └─► 48 (depositing rime fog)
 │   │
 │   ├─► temp <= dewpoint && wind < 1.0 && humidity > 95%?
-│   │       └─► 11 (shallow fog)
+│   │       └─► 11 (shallow fog)  ← NOW CHECKED BEFORE FOG!
+│   │
+│   ├─► spread < 1.0 && humidity > 97% && delta < 5?
+│   │       └─► 45 (fog)
 │   │
 │   └─► spread < 2.0 && humidity 90-97%?
 │           └─► 10 (mist)
@@ -506,19 +529,24 @@ derive_wmo_code($pws, $cw)
 
 ### ✅ Korrekt implementiert
 
-**Temperatur-Grenzen (disjunkt, lückenlos):**
-| Bereich | Niederschlagsart |
-|---------|------------------|
-| temp < 0.5°C | Freezing (gefrierend) |
-| 0.5 ≤ temp < 1.0°C | Snow (Schnee) |
-| 1.0 ≤ temp < 3.0°C | Sleet (Schneeregen) |
-| temp ≥ 3.0°C | Rain/Drizzle |
+**Temperatur-Grenzen (restructured 2026-01-30):**
+| Bereich | Niederschlagsart | Logik |
+|---------|------------------|-------|
+| temp < -2°C | Snow (sicher) | Zu kalt für flüssigen Niederschlag |
+| -2°C ≤ temp < 0°C | Snow (primär) | Freezing Rain nur bei hoher Rate UND temp > -1°C |
+| 0°C ≤ temp < 0.5°C | Freezing Drizzle/Rain | Rate entscheidet: < 1.0 = Drizzle, ≥ 1.0 = Rain |
+| 0.5°C ≤ temp < 1.5°C | Snow | Schnee noch möglich |
+| 1.5°C ≤ temp < 3.0°C | Sleet (Schneeregen) | Mischform |
+| temp ≥ 3.0°C | Rain/Drizzle | Flüssiger Niederschlag |
 
 **Grenzwert-Test:**
-- temp = 0.49°C → Freezing ✓
-- temp = 0.50°C → Snow ✓ (nicht mehr Freezing)
-- temp = 0.99°C → Snow ✓
-- temp = 1.00°C → Sleet ✓ (nicht mehr Snow)
+- temp = -5.0°C → Snow ✓ (sicher Schnee, zu kalt für Flüssigkeit)
+- temp = -1.5°C, rate = 0.5 → Snow ✓ (primär Schnee)
+- temp = -0.5°C, rate = 3.0 → Freezing Rain ✓ (hohe Rate nahe 0°C)
+- temp = 0.3°C, rate = 0.5 → Freezing Drizzle ✓
+- temp = 0.3°C, rate = 2.0 → Freezing Rain ✓
+- temp = 1.0°C → Snow ✓
+- temp = 1.5°C → Sleet ✓ (nicht mehr Snow)
 - temp = 2.99°C → Sleet ✓
 - temp = 3.00°C → Rain ✓ (nicht mehr Sleet)
 
@@ -538,25 +566,11 @@ derive_wmo_code($pws, $cw)
 
 ### ⚠️ Potenzielle Probleme
 
-#### Problem 1: Shallow Fog (11) wird praktisch nie erreicht
+#### ~~Problem 1: Shallow Fog (11) wird praktisch nie erreicht~~ ✅ BEHOBEN (2026-01-30)
 
-**Situation:** Die Prüfung für Fog (45) kommt VOR Shallow Fog (11).
+**Ursprüngliches Problem:** Die Prüfung für Fog (45) kam VOR Shallow Fog (11).
 
-**Bedingungen:**
-- Fog (45): spread < 1.0 && humidity > 97% && delta < 5
-- Shallow Fog (11): temp ≤ dewpoint && wind < 1.0 && humidity > 95%
-
-**Problem:** `temp ≤ dewpoint` bedeutet `spread ≤ 0`, was auch `spread < 1.0` erfüllt.
-Wenn also Shallow-Fog-Bedingungen erfüllt sind UND humidity > 97%, wird Fog (45) erkannt.
-
-**Konsequenz:** Shallow Fog wird nur erkannt bei:
-- temp ≤ dewpoint (spread ≤ 0)
-- wind < 1.0 m/s
-- humidity 95-97% (NICHT > 97%, sonst Fog)
-
-**Bewertung:** ⚠️ Eingeschränkte Erkennung, aber nicht falsch. Echter flacher Bodennebel bei Windstille mit sehr hoher Feuchtigkeit wird als normaler Nebel klassifiziert.
-
-**Mögliche Korrektur:** Shallow Fog VOR Fog prüfen, oder Wind-Bedingung in Fog aufnehmen.
+**Lösung:** WMO 11 (Shallow Fog) wird jetzt VOR WMO 45 (Fog) geprüft. Shallow Fog ist der spezifischere Fall (windstill + temp ≤ dewpoint) und hat jetzt Vorrang.
 
 ---
 
@@ -647,12 +661,13 @@ if ($is_drizzle || $precip_rate < 0.2) {
 
 | # | Problem | Schwere | Status |
 |---|---------|---------|--------|
-| 1 | Shallow Fog selten erkannt | Niedrig | ⚠️ Akzeptabel |
+| 1 | ~~Shallow Fog selten erkannt~~ | - | ✅ Behoben (2026-01-30) - WMO 11 vor WMO 45 |
 | 2 | Snow Grains restriktiv | Niedrig | ⚠️ Wahrscheinlich korrekt |
 | 3 | Freezing Drizzle dense Logik | Niedrig | ⚠️ Überdenken |
 | 4 | ~~Kein Drizzle moderate/dense~~ | - | ✅ Behoben (2026-01-30) |
 | 5 | ~~Delta null → kein WMO~~ | - | ✅ Behoben (Wunderground-Fallback) |
 | 6 | Niederschlag vor Nebel | - | ✅ Korrekt |
+| 7 | ~~Snow/Freezing Priorität falsch~~ | - | ✅ Behoben (2026-01-30) - Snow hat Vorrang bei temp < -2°C |
 
 ---
 
@@ -672,3 +687,5 @@ if ($is_drizzle || $precip_rate < 0.2) {
 | 2026-01-29 | Implementierung WMO 04, 10, 11, 48, 57, 67, 68, 69, 77; strikte Nebel-Schwellen; optimierte Delta-Schwellen |
 | 2026-01-30 | Drizzle-Schwellenwerte: light < 0.2, moderate 0.2-1.0, rain >= 1.0 mm/h |
 | 2026-01-30 | CloudWatcher-Fallback: `cloudwatcher_online` API-Feld, Wunderground-Fallback bei Ausfall |
+| 2026-01-30 | **Snow/Freezing-Logik umstrukturiert**: Schnee hat Vorrang bei temp < -2°C; neue Temperaturzonen; SNOW_TEMP_MAX 1.0→1.5°C |
+| 2026-01-30 | **WMO 11 vor WMO 45**: Shallow Fog wird jetzt vor Fog geprüft (spezifischerer Fall hat Vorrang) |

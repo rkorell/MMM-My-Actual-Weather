@@ -9,6 +9,8 @@
  * Modified: 2026-01-29 - Extended with WMO 04, 10, 11, 48, 57, 67, 68, 77
  *                        Stricter fog thresholds, finer cloud thresholds
  * Modified: 2026-01-30 - Drizzle thresholds: light < 0.2, moderate 0.2-1.0, rain >= 1.0 mm/h
+ * Modified: 2026-01-30 - Snow/Freezing logic restructured: snow priority over freezing at low temps
+ *                        WMO 11 (shallow fog) now checked before WMO 45 (fog)
  */
 
 require_once __DIR__ . '/config.php';
@@ -18,15 +20,17 @@ require_once __DIR__ . '/config.php';
  *
  * Decision tree (priority order):
  * 1. Precipitation (highest priority)
- *    - Freezing drizzle/rain (temp < 0.5°C)
- *    - Snow (temp < 1°C)
- *    - Sleet/Schneeregen (temp 1-3°C)
- *    - Rain/Drizzle (temp >= 3°C)
+ *    - temp < -2°C: certainly snow (too cold for liquid)
+ *    - temp -2°C to 0°C: primarily snow, freezing rain at high rates
+ *    - temp 0°C to 0.5°C: freezing drizzle/rain
+ *    - temp 0.5°C to 1.5°C: snow
+ *    - temp 1.5°C to 3°C: sleet (snow/rain mix)
+ *    - temp >= 3°C: rain/drizzle
  *
  * 2. Fog/Mist (no precipitation)
  *    - Rime fog (fog + temp < 0)
+ *    - Shallow fog (temp <= dewpoint, wind < 1) - checked before fog!
  *    - Fog (spread < 1, humidity > 97%, delta < 5)
- *    - Shallow fog (temp <= dewpoint, wind < 1)
  *    - Mist (spread < 2, humidity 90-97%)
  *
  * 3. Haze (no precipitation, no fog)
@@ -126,59 +130,61 @@ function derive_wmo_code($pws, $cw) {
 /**
  * Derive precipitation WMO code
  *
- * Drizzle thresholds:
- *   < 0.2 mm/h = light (WMO 51/56)
- *   0.2 - 1.0 mm/h = moderate (WMO 53) or dense freezing (WMO 57)
+ * Temperature zones (restructured for correct snow/freezing priority):
+ *   temp < -2°C        = certainly snow (too cold for liquid precipitation)
+ *   temp -2°C to 0°C   = primarily snow, but freezing rain possible at high rates
+ *   temp 0°C to 0.5°C  = freezing drizzle/rain zone
+ *   temp 0.5°C to 1.5°C = snow zone
+ *   temp 1.5°C to 3°C  = sleet (snow/rain mix)
+ *   temp >= 3°C        = rain/drizzle
+ *
+ * Rate thresholds:
+ *   < 0.2 mm/h = drizzle light (WMO 51/56)
+ *   0.2 - 1.0 mm/h = drizzle moderate (WMO 53) or dense freezing (WMO 57)
  *   >= 1.0 mm/h = rain (WMO 61+)
  */
 function derive_precipitation_code($temp, $humidity, $precip_rate, $cw_is_raining, $result) {
     // Determine if it's drizzle (CW detects but PWS barely registers)
     $is_light_drizzle = $cw_is_raining && ($precip_rate < DRIZZLE_LIGHT_MAX);
 
-    // Freezing precipitation (temp < 0.5°C)
-    if ($temp < FREEZING_TEMP_MAX) {
-        if ($precip_rate < DRIZZLE_MAX) {
-            // Freezing drizzle (rate < 1.0 mm/h)
-            if ($precip_rate >= FREEZING_DRIZZLE_DENSE) {
-                $result['wmo_code'] = 57;  // Freezing drizzle, dense (>= 0.5 mm/h)
-                $result['condition'] = 'freezing_drizzle_dense';
-            } else {
-                $result['wmo_code'] = 56;  // Freezing drizzle, light (< 0.5 mm/h)
-                $result['condition'] = 'freezing_drizzle_light';
-            }
-        } else {
-            // Freezing rain (rate >= 1.0 mm/h)
-            if ($precip_rate >= RAIN_LIGHT_MAX) {
-                $result['wmo_code'] = 67;  // Freezing rain, heavy
-                $result['condition'] = 'freezing_rain_heavy';
-            } else {
-                $result['wmo_code'] = 66;  // Freezing rain, light
-                $result['condition'] = 'freezing_rain_light';
-            }
-        }
-        return $result;
-    }
-
-    // Snow (temp < 1°C)
+    // ========================================
+    // SNOW ZONE (temp < 1.5°C)
+    // ========================================
     if ($temp < SNOW_TEMP_MAX) {
-        if ($precip_rate < DRIZZLE_LIGHT_MAX && $temp < SNOW_GRAINS_TEMP) {
-            // Snow grains (very light < 0.2 mm/h, very cold < -2°C)
-            $result['wmo_code'] = 77;
-            $result['condition'] = 'snow_grains';
-        } elseif ($precip_rate < RAIN_LIGHT_MAX) {
-            $result['wmo_code'] = 71;  // Snow, slight
-            $result['condition'] = 'snow_slight';
-        } elseif ($precip_rate < RAIN_MODERATE_MAX) {
-            $result['wmo_code'] = 73;  // Snow, moderate
-            $result['condition'] = 'snow_moderate';
-        } else {
-            $result['wmo_code'] = 75;  // Snow, heavy
-            $result['condition'] = 'snow_heavy';
+
+        // Zone 1: Certainly snow (temp < -2°C) - too cold for liquid precipitation
+        if ($temp < SNOW_CERTAIN_TEMP) {
+            return derive_snow_code($temp, $precip_rate, $result);
         }
-        return $result;
+
+        // Zone 2: Primarily snow (-2°C to 0°C), but freezing rain possible at high rates
+        if ($temp >= SNOW_CERTAIN_TEMP && $temp < 0) {
+            // High rate AND temp > -1°C → freezing rain (typical for freezing rain events)
+            if ($precip_rate >= RAIN_LIGHT_MAX && $temp > FREEZING_RAIN_TEMP) {
+                return derive_freezing_rain_code($precip_rate, $result);
+            }
+            // Otherwise: snow
+            return derive_snow_code($temp, $precip_rate, $result);
+        }
+
+        // Zone 3: Freezing drizzle/rain zone (0°C to 0.5°C)
+        if ($temp >= 0 && $temp < FREEZING_TEMP_MAX) {
+            if ($precip_rate >= DRIZZLE_MAX) {
+                // Rate >= 1.0 mm/h → freezing rain
+                return derive_freezing_rain_code($precip_rate, $result);
+            } else {
+                // Rate < 1.0 mm/h → freezing drizzle
+                return derive_freezing_drizzle_code($precip_rate, $result);
+            }
+        }
+
+        // Zone 4: Snow zone (0.5°C to 1.5°C)
+        return derive_snow_code($temp, $precip_rate, $result);
     }
 
-    // Sleet / Schneeregen (temp 1-3°C)
+    // ========================================
+    // SLEET ZONE (temp 1.5°C to 3°C)
+    // ========================================
     if ($temp >= SLEET_TEMP_MIN && $temp < SLEET_TEMP_MAX) {
         if ($precip_rate < RAIN_LIGHT_MAX) {
             $result['wmo_code'] = 68;  // Sleet, light
@@ -190,7 +196,9 @@ function derive_precipitation_code($temp, $humidity, $precip_rate, $cw_is_rainin
         return $result;
     }
 
-    // Rain or drizzle (temp >= 3°C)
+    // ========================================
+    // RAIN/DRIZZLE ZONE (temp >= 3°C)
+    // ========================================
     if ($is_light_drizzle || $precip_rate < DRIZZLE_LIGHT_MAX) {
         // Drizzle light: CW detects but PWS barely registers, or rate < 0.2 mm/h
         $result['wmo_code'] = 51;
@@ -217,8 +225,63 @@ function derive_precipitation_code($temp, $humidity, $precip_rate, $cw_is_rainin
 }
 
 /**
+ * Derive snow WMO code based on rate and temperature
+ */
+function derive_snow_code($temp, $precip_rate, $result) {
+    if ($precip_rate < DRIZZLE_LIGHT_MAX && $temp < SNOW_GRAINS_TEMP) {
+        // Snow grains (very light < 0.2 mm/h, very cold < -2°C)
+        $result['wmo_code'] = 77;
+        $result['condition'] = 'snow_grains';
+    } elseif ($precip_rate < RAIN_LIGHT_MAX) {
+        $result['wmo_code'] = 71;  // Snow, slight
+        $result['condition'] = 'snow_slight';
+    } elseif ($precip_rate < RAIN_MODERATE_MAX) {
+        $result['wmo_code'] = 73;  // Snow, moderate
+        $result['condition'] = 'snow_moderate';
+    } else {
+        $result['wmo_code'] = 75;  // Snow, heavy
+        $result['condition'] = 'snow_heavy';
+    }
+    return $result;
+}
+
+/**
+ * Derive freezing rain WMO code based on rate
+ */
+function derive_freezing_rain_code($precip_rate, $result) {
+    if ($precip_rate >= RAIN_LIGHT_MAX) {
+        $result['wmo_code'] = 67;  // Freezing rain, heavy
+        $result['condition'] = 'freezing_rain_heavy';
+    } else {
+        $result['wmo_code'] = 66;  // Freezing rain, light
+        $result['condition'] = 'freezing_rain_light';
+    }
+    return $result;
+}
+
+/**
+ * Derive freezing drizzle WMO code based on rate
+ */
+function derive_freezing_drizzle_code($precip_rate, $result) {
+    if ($precip_rate >= FREEZING_DRIZZLE_DENSE) {
+        $result['wmo_code'] = 57;  // Freezing drizzle, dense (>= 0.5 mm/h)
+        $result['condition'] = 'freezing_drizzle_dense';
+    } else {
+        $result['wmo_code'] = 56;  // Freezing drizzle, light (< 0.5 mm/h)
+        $result['condition'] = 'freezing_drizzle_light';
+    }
+    return $result;
+}
+
+/**
  * Derive fog/mist WMO code
  * Returns null if no fog/mist condition detected
+ *
+ * Priority order (most specific first):
+ *   1. WMO 48 - Depositing rime fog (fog + freezing)
+ *   2. WMO 11 - Shallow fog (windstill, temp <= dewpoint) - MORE SPECIFIC
+ *   3. WMO 45 - Fog (strict thresholds)
+ *   4. WMO 10 - Mist (less strict)
  */
 function derive_fog_mist_code($temp, $humidity, $dewpoint, $spread, $wind_speed, $result) {
     // Need humidity and spread for fog detection
@@ -241,21 +304,23 @@ function derive_fog_mist_code($temp, $humidity, $dewpoint, $spread, $wind_speed,
         return $result;
     }
 
+    // Shallow fog (WMO 11): temp at or below dewpoint, windstill
+    // MUST be checked BEFORE WMO 45 - it's a more specific condition
+    // (spread <= 0 also satisfies spread < 1.0, so fog would match first otherwise)
+    if ($dewpoint !== null && $temp <= $dewpoint &&
+        $wind_speed !== null && $wind_speed < SHALLOW_FOG_WIND_MAX &&
+        $humidity > 95) {
+        $result['wmo_code'] = 11;
+        $result['condition'] = 'shallow_fog';
+        return $result;
+    }
+
     // Fog (WMO 45): Strict thresholds
     if ($spread < FOG_SPREAD_MAX &&
         $humidity > FOG_HUMIDITY_MIN &&
         $result['delta_c'] !== null && $result['delta_c'] < FOG_DELTA_MAX) {
         $result['wmo_code'] = 45;
         $result['condition'] = 'fog';
-        return $result;
-    }
-
-    // Shallow fog (WMO 11): temp at or below dewpoint, windstill
-    if ($dewpoint !== null && $temp <= $dewpoint &&
-        $wind_speed !== null && $wind_speed < SHALLOW_FOG_WIND_MAX &&
-        $humidity > 95) {
-        $result['wmo_code'] = 11;
-        $result['condition'] = 'shallow_fog';
         return $result;
     }
 
