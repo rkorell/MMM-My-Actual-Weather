@@ -285,7 +285,7 @@ def filtered_average(values):
 /home/pi/cloudwatcher/
 ├── cloudwatcher_service.py    # Haupt-Service (Reader + Webserver)
 ├── cloudwatcher_reader.py     # RS232-Kommunikation (Modul)
-├── config.py                  # Konfiguration (Port, Schwellwerte)
+├── config.py                  # Konfiguration (Port, Schwellenwerte)
 ├── templates/
 │   └── dashboard.html         # Web-Dashboard Template
 ├── static/
@@ -416,7 +416,7 @@ Die Differenz zwischen Umgebungstemperatur und Himmelstemperatur:
 delta = ambient_temp_c - sky_temp_c
 ```
 
-### 6.2 Schwellwerte
+### 6.2 Schwellenwerte
 
 | Delta (°C) | Bewölkung | Beschreibung |
 |------------|-----------|--------------|
@@ -427,20 +427,20 @@ delta = ambient_temp_c - sky_temp_c
 | 5 - 10 | Cloudy | Bewölkt |
 | < 5 | Overcast | Bedeckt |
 
-**Hinweis:** Diese Schwellwerte sind Richtwerte und müssen eventuell für den Standort kalibriert werden.
+**Hinweis:** Diese Schwellenwerte sind Richtwerte und müssen eventuell für den Standort kalibriert werden.
 
 ### 6.3 Temperatur-Korrektur
 
-Bei sehr kalten oder sehr warmen Umgebungstemperaturen verschieben sich die Schwellwerte:
+Bei sehr kalten oder sehr warmen Umgebungstemperaturen verschieben sich die Schwellenwerte:
 
 ```python
 def get_cloud_condition(delta, ambient_temp):
     # Korrektur für extreme Temperaturen
     correction = 0
     if ambient_temp < -10:
-        correction = -3  # Winter: Schwellwerte senken
+        correction = -3  # Winter: Schwellenwerte senken
     elif ambient_temp > 25:
-        correction = +3  # Sommer: Schwellwerte erhöhen
+        correction = +3  # Sommer: Schwellenwerte erhöhen
     
     adjusted_delta = delta - correction
     
@@ -760,7 +760,7 @@ sudo ufw allow 5000/tcp
 
 1. **Baudrate:** 9600 oder 19200? Muss getestet werden.
 
-2. **Kalibrierung:** Die Delta-Schwellwerte (25/20/15/10/5°C) sind Richtwerte. Nach Installation Feinabstimmung nötig.
+2. **Kalibrierung:** Die Delta-Schwellenwerte (25/20/15/10/5°C) sind Richtwerte. Nach Installation Feinabstimmung nötig.
 
 3. **Sommer vs. Winter:** Die IR-Messung verhält sich bei extremen Temperaturen anders. Eventuell saisonale Korrektur nötig.
 
@@ -886,7 +886,7 @@ Auf dem CloudWatcher-Pi: `/home/pi/cloudwatcher/`
 ├── cloudwatcher_reader.py      # RS232-Kommunikation (12.5 KB)
 ├── cloudwatcher_service.py     # Flask-Webserver (8.5 KB)
 ├── cloudwatcher.service        # Systemd Service File
-├── config.py                   # Konfiguration (Schwellwerte, Ports)
+├── config.py                   # Konfiguration (Schwellenwerte, Ports)
 ├── README.md                   # Setup-Anleitung
 └── templates/
     └── dashboard.html          # Web-Dashboard (deutsch)
@@ -899,7 +899,7 @@ Auf dem CloudWatcher-Pi: `/home/pi/cloudwatcher/`
 - Baudrate: 9600 (alternativ 19200)
 - Web Port: 5000
 - Read Interval: 30 Sekunden
-- Cloud-Schwellwerte: clear >25°C, mostly_clear >20°C, etc.
+- Cloud-Schwellenwerte: clear >25°C, mostly_clear >20°C, etc.
 - Temperatur-Korrektur für extreme Werte
 
 #### cloudwatcher_reader.py
@@ -1047,7 +1047,7 @@ curl http://172.23.56.60:5000/api/data
 
 1. **Hardware nicht angeschlossen** - CloudWatcher bestellt, in Lieferung
 2. **Baudrate unbekannt** - 9600 oder 19200, muss getestet werden
-3. **Schwellwerte nicht kalibriert** - Richtwerte aus Dokumentation, Feinabstimmung nach Installation
+3. **Schwellenwerte nicht kalibriert** - Richtwerte aus Dokumentation, Feinabstimmung nach Installation
 4. **MagicMirror-Integration ausstehend** - Veto-Logik noch nicht implementiert
 
 ---

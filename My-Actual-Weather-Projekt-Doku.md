@@ -173,7 +173,7 @@ Day/Night wird von API geliefert (`is_daylight` bzw. `dayOrNight`)
 | `wmo_derivation.php` | WMO-Code Ableitung aus Sensordaten |
 | `api.php` | JSON-API (current, history, raw, status) |
 | `dashboard.php` | Web-Dashboard mit Charts und WMO-Icon-Übersicht |
-| `config.php` | Konfiguration (Schwellwerte, Sensor-Namen) |
+| `config.php` | Konfiguration (Schwellenwerte, Sensor-Namen) |
 | `db_connect.php` | DB-Credentials (nicht im Git!) |
 
 **Pfad auf Webserver:** `/var/www/weather-api/`
@@ -196,7 +196,7 @@ Day/Night wird von API geliefert (`is_daylight` bzw. `dayOrNight`)
 | `api.php?action=feedback` | POST | Feedback speichern (`{feedback: bool, correct_wmo: int, comment: string}`) |
 | `api.php?action=feedback_stats` | GET | Feedback-Statistiken und Empfehlungen |
 | `api.php?action=wmo_list` | GET | WMO-Codes sortiert nach Nähe zum aktuellen |
-| `api.php?action=apply_recommendations` | POST | Schwellwerte in config.php anpassen (mit Backup) |
+| `api.php?action=apply_recommendations` | POST | Schwellenwerte in config.php anpassen (mit Backup) |
 
 **Feedback-Datenbank-Spalten:**
 | Spalte | Typ | Beschreibung |

@@ -1544,7 +1544,7 @@ $activeTab = $_GET['tab'] ?? 'weather';
 
             // Confirm before applying
             const paramList = selected.map(s => `${s.parameter} = ${s.value}`).join('\n');
-            if (!confirm(`Folgende Schwellwerte ändern?\n\n${paramList}`)) {
+            if (!confirm(`Folgende Schwellenwerte ändern?\n\n${paramList}`)) {
                 return;
             }
 

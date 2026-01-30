@@ -10,7 +10,7 @@
 
 - [README.md](../../README.md) - Modul-Dokumentation (öffentlich)
 - [My-Actual-Weather-Projekt-Doku.md](../../My-Actual-Weather-Projekt-Doku.md) - Projektdokumentation (intern)
-- [config.php](../config.php) - Aktuelle Schwellwerte
+- [config.php](../config.php) - Aktuelle Schwellenwerte
 - [wmo_derivation.php](../wmo_derivation.php) - Implementierung
 
 ---
@@ -75,7 +75,7 @@ Die Bewölkung wird primär über **Delta T** (Außentemperatur minus Himmelstem
 | 02 | Teilweise bewölkt | > 8-15°C | Mittelhohe Bewölkung |
 | 03 | Bedeckt | < 5-8°C | Dichte Schichtbewölkung |
 
-**Hinweis:** Die exakten Schwellwerte müssen für den Standort kalibriert werden. Empfohlene Startwerte: 25/18/8/5.
+**Hinweis:** Die exakten Schwellenwerte müssen für den Standort kalibriert werden. Empfohlene Startwerte: 25/18/8/5.
 
 ---
 
@@ -372,7 +372,7 @@ Bedingung:
 
 ---
 
-## Schwellwerte (config.php)
+## Schwellenwerte (config.php)
 
 ### Aktuelle Werte (Stand 2026-01-30)
 
@@ -670,5 +670,5 @@ if ($is_drizzle || $precip_rate < 0.2) {
 |-------|----------|
 | 2026-01-29 | Initiale Erstellung der Dokumentation |
 | 2026-01-29 | Implementierung WMO 04, 10, 11, 48, 57, 67, 68, 69, 77; strikte Nebel-Schwellen; optimierte Delta-Schwellen |
-| 2026-01-30 | Drizzle-Schwellwerte: light < 0.2, moderate 0.2-1.0, rain >= 1.0 mm/h |
+| 2026-01-30 | Drizzle-Schwellenwerte: light < 0.2, moderate 0.2-1.0, rain >= 1.0 mm/h |
 | 2026-01-30 | CloudWatcher-Fallback: `cloudwatcher_online` API-Feld, Wunderground-Fallback bei Ausfall |
