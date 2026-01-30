@@ -11,6 +11,7 @@
  * Modified: 2026-01-29 - Added icon mappings for WMO 4, 10, 11, 68, 69
  * Modified: 2026-01-30 - Fixed WMO 55 icon mapping (was freezing, should be normal drizzle)
  * Modified: 2026-01-30 - Added WMO Icon Overview tab with wi-class mappings
+ * Modified: 2026-01-30 - Added Feedback tab (mobile-optimized) and Analyse tab
  */
 
 require_once __DIR__ . '/db_connect.php';
@@ -38,13 +39,22 @@ function getHistoryData($pdo) {
 }
 
 /**
- * Get database stats
+ * Get database stats (count and size)
  */
 function getDbStats($pdo) {
+    // Row count
     $sql = "SELECT COUNT(*) as count FROM weather_readings";
     $stmt = $pdo->query($sql);
     $row = $stmt->fetch();
-    return intval($row['count']);
+    $count = intval($row['count']);
+
+    // Database size in MB
+    $sql = "SELECT pg_database_size('weather') as size_bytes";
+    $stmt = $pdo->query($sql);
+    $row = $stmt->fetch();
+    $sizeMb = round(intval($row['size_bytes']) / 1024 / 1024, 1);
+
+    return ['count' => $count, 'size_mb' => $sizeMb];
 }
 
 /**
@@ -168,7 +178,7 @@ function getConditionDE($condition, $conditionDE) {
 // Fetch data
 $current = getCurrentData($pdo);
 $history = getHistoryData($pdo);
-$dbCount = getDbStats($pdo);
+$dbStats = getDbStats($pdo);
 
 // Calculate data age
 $dataAge = null;
@@ -242,20 +252,55 @@ $activeTab = $_GET['tab'] ?? 'weather';
         header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             margin-bottom: 24px;
             padding-bottom: 16px;
             border-bottom: 2px solid var(--accent);
         }
 
-        h1 {
-            font-size: 1.8rem;
+        .header-left h1 {
+            font-size: 1.6rem;
             font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .header-meta {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .header-logo {
+            flex-shrink: 0;
+        }
+
+        .header-logo img {
+            opacity: 0.9;
+            transition: opacity 0.2s;
+        }
+
+        .header-logo img:hover {
+            opacity: 1;
+        }
+
+        .header-right {
+            text-align: right;
+        }
+
+        .header-timestamp {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .refresh-info {
+            color: var(--text-secondary);
+            opacity: 0.7;
         }
 
         .status {
             display: flex;
             align-items: center;
+            justify-content: flex-end;
             gap: 8px;
             font-size: 0.9rem;
         }
@@ -495,18 +540,358 @@ $activeTab = $_GET['tab'] ?? 'weather';
             color: var(--bg-primary);
         }
 
+        /* Feedback Tab Styles */
+        .feedback-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .feedback-current {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .feedback-current img {
+            width: 96px;
+            height: 96px;
+            margin-bottom: 12px;
+        }
+
+        .feedback-current .condition-name {
+            font-size: 1.4rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .feedback-current .wmo-info {
+            font-size: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .feedback-buttons {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .feedback-btn {
+            flex: 1;
+            padding: 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.4rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .feedback-btn:active {
+            transform: scale(0.98);
+        }
+
+        .feedback-btn.correct {
+            background: var(--success);
+            color: #000;
+        }
+
+        .feedback-btn.correct:hover {
+            box-shadow: 0 0 20px rgba(74, 222, 128, 0.4);
+        }
+
+        .feedback-btn.wrong {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .feedback-btn.wrong:hover {
+            box-shadow: 0 0 20px rgba(248, 113, 113, 0.4);
+        }
+
+        .feedback-btn svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        .correction-panel {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 24px;
+            display: none;
+        }
+
+        .correction-panel.visible {
+            display: block;
+        }
+
+        .correction-panel h3 {
+            font-size: 1rem;
+            margin-bottom: 16px;
+            color: var(--text-secondary);
+        }
+
+        .correction-select {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.1rem;
+            border: 2px solid var(--accent-dim);
+            border-radius: 8px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin-bottom: 16px;
+            cursor: pointer;
+        }
+
+        .correction-select:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .correction-comment {
+            width: 100%;
+            padding: 12px;
+            font-size: 1rem;
+            border: 1px solid var(--bg-card-hover);
+            border-radius: 8px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            resize: vertical;
+            min-height: 80px;
+            margin-bottom: 16px;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            background: var(--accent);
+            color: var(--bg-primary);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .submit-btn:hover {
+            background: var(--accent-dim);
+            color: var(--text-primary);
+        }
+
+        .submit-btn:disabled {
+            background: var(--text-secondary);
+            cursor: not-allowed;
+        }
+
+        .feedback-message {
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+            text-align: center;
+            display: none;
+        }
+
+        .feedback-message.success {
+            display: block;
+            background: rgba(74, 222, 128, 0.2);
+            color: var(--success);
+        }
+
+        .feedback-message.error {
+            display: block;
+            background: rgba(248, 113, 113, 0.2);
+            color: var(--danger);
+        }
+
+        /* Analysis Tab Styles */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .stat-value.good {
+            color: var(--success);
+        }
+
+        .stat-value.bad {
+            color: var(--danger);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .error-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 24px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .error-table th {
+            background: var(--accent-dim);
+            color: var(--text-primary);
+            padding: 12px;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+
+        .error-table td {
+            padding: 12px;
+            border-bottom: 1px solid var(--bg-primary);
+            font-size: 0.9rem;
+        }
+
+        .error-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .recommendation-list {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .recommendation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--bg-primary);
+        }
+
+        .recommendation-item:last-child {
+            border-bottom: none;
+        }
+
+        .recommendation-checkbox {
+            width: 20px;
+            height: 20px;
+            margin-top: 2px;
+            cursor: pointer;
+        }
+
+        .recommendation-content {
+            flex: 1;
+        }
+
+        .recommendation-param {
+            font-family: 'Courier New', monospace;
+            color: var(--accent);
+            font-size: 0.95rem;
+        }
+
+        .recommendation-values {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .recommendation-reason {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        .apply-btn {
+            padding: 16px 32px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            background: var(--success);
+            color: #000;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .apply-btn:hover {
+            background: #22c55e;
+        }
+
+        .apply-btn:disabled {
+            background: var(--text-secondary);
+            cursor: not-allowed;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
         @media (max-width: 600px) {
             body {
                 padding: 12px;
             }
 
-            h1 {
-                font-size: 1.4rem;
+            header {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .header-left, .header-right {
+                text-align: center;
+                width: 100%;
+            }
+
+            .header-logo {
+                order: -1;
+                margin-bottom: 8px;
+            }
+
+            .header-logo img {
+                width: 64px;
+                height: auto;
+            }
+
+            .header-left h1 {
+                font-size: 1.2rem;
+            }
+
+            .header-meta {
+                font-size: 0.8rem;
+            }
+
+            .status {
+                justify-content: center;
+            }
+
+            .tab-nav {
+                flex-wrap: wrap;
             }
 
             .tab-nav a {
-                padding: 10px 16px;
-                font-size: 0.9rem;
+                padding: 10px 12px;
+                font-size: 0.85rem;
             }
 
             .card-grid {
@@ -552,22 +937,81 @@ $activeTab = $_GET['tab'] ?? 'weather';
             .icon-filename {
                 font-size: 0.75rem;
             }
+
+            /* Feedback mobile optimizations */
+            .feedback-container {
+                padding: 10px;
+            }
+
+            .feedback-current {
+                padding: 16px;
+            }
+
+            .feedback-current img {
+                width: 72px;
+                height: 72px;
+            }
+
+            .feedback-current .condition-name {
+                font-size: 1.2rem;
+            }
+
+            .feedback-btn {
+                padding: 20px 16px;
+                font-size: 1.2rem;
+            }
+
+            .feedback-btn svg {
+                width: 28px;
+                height: 28px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .stat-value {
+                font-size: 1.5rem;
+            }
+
+            .error-table {
+                font-size: 0.8rem;
+            }
+
+            .error-table th,
+            .error-table td {
+                padding: 8px 6px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>Weather Dashboard</h1>
-            <div class="status">
-                <span class="status-dot <?= $isOnline ? 'online' : '' ?>"></span>
-                <span><?= $isOnline ? 'Online' : 'Offline' ?></span>
+            <div class="header-left">
+                <h1>Wetter-Cockpit Müllenborn</h1>
+                <div class="header-meta">© Dr. Ralf Korell</div>
+            </div>
+            <div class="header-logo">
+                <img src="icons/rk_wolf.png" alt="RK Logo" width="80" height="52">
+            </div>
+            <div class="header-right">
+                <div class="status">
+                    <span class="status-dot <?= $isOnline ? 'online' : '' ?>"></span>
+                    <span><?= $isOnline ? 'Online' : 'Offline' ?></span>
+                </div>
+                <div class="header-timestamp">
+                    Stand: <?= $current ? (new DateTime($current['timestamp']))->format('d.m.y H:i') : '—' ?>
+                    <span class="refresh-info">(Refresh: 60s)</span>
+                </div>
             </div>
         </header>
 
         <!-- Tab Navigation -->
         <nav class="tab-nav">
             <a href="?tab=weather" class="<?= $activeTab === 'weather' ? 'active' : '' ?>">Wetter</a>
+            <a href="?tab=feedback" class="<?= $activeTab === 'feedback' ? 'active' : '' ?>">Feedback</a>
+            <a href="?tab=analyse" class="<?= $activeTab === 'analyse' ? 'active' : '' ?>">Analyse</a>
             <a href="?tab=icons" class="<?= $activeTab === 'icons' ? 'active' : '' ?>">WMO Icons</a>
         </nav>
 
@@ -708,6 +1152,412 @@ $activeTab = $_GET['tab'] ?? 'weather';
         </div>
         <?php endif; ?>
 
+        <?php elseif ($activeTab === 'feedback'): ?>
+        <!-- ========== FEEDBACK TAB ========== -->
+
+        <?php if ($current): ?>
+        <?php
+            $isDaylight = $current['cw_is_daylight'] === 't' || $current['cw_is_daylight'] === true;
+            $iconFile = getWeatherIcon($current['wmo_code'], $isDaylight, $wmoToIcon);
+            $conditionText = getConditionDE($current['condition'] ?? '', $conditionDE);
+            $currentWmo = $current['wmo_code'] ?? 0;
+            $hasFeedback = $current['feedback'] !== null;
+            $feedbackCorrect = $current['feedback'] === 't' || $current['feedback'] === true;
+        ?>
+
+        <div class="feedback-container">
+            <!-- Current Condition Display -->
+            <div class="feedback-current">
+                <img src="icons/<?= $iconFile ?>" alt="<?= $conditionText ?>">
+                <div class="condition-name"><?= $conditionText ?></div>
+                <div class="wmo-info">WMO <?= $currentWmo ?> &bull; <?= formatDE($current['temp_c'], 1) ?>°C &bull; <?= formatDE($current['humidity'], 0) ?>%</div>
+            </div>
+
+            <?php if ($hasFeedback): ?>
+            <!-- Already has feedback -->
+            <div class="feedback-already" style="background: var(--bg-card); border-radius: 12px; padding: 24px; text-align: center;">
+                <div style="font-size: 1.2rem; margin-bottom: 8px;">
+                    <?php if ($feedbackCorrect): ?>
+                        <span style="color: var(--success);">✓ Bereits als korrekt markiert</span>
+                    <?php else: ?>
+                        <span style="color: var(--warning);">✓ Korrektur bereits erfasst</span>
+                        <?php if ($current['feedback_correct_wmo']): ?>
+                            <br><small style="color: var(--text-secondary);">→ WMO <?= $current['feedback_correct_wmo'] ?></small>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+                <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                    Warte auf nächste Messung...
+                </div>
+            </div>
+            <?php else: ?>
+            <!-- Feedback Buttons -->
+            <div class="feedback-buttons">
+                <button type="button" class="feedback-btn correct" onclick="submitCorrect()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    OK
+                </button>
+                <button type="button" class="feedback-btn wrong" onclick="showCorrection()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                    Falsch
+                </button>
+            </div>
+
+            <!-- Correction Panel (hidden until "Falsch" clicked) -->
+            <div id="correctionPanel" class="correction-panel">
+                <h3>Was ist der richtige Zustand?</h3>
+                <select id="correctWmo" class="correction-select">
+                    <option value="">-- Bitte wählen --</option>
+                    <!-- Options populated by JavaScript -->
+                </select>
+                <textarea id="feedbackComment" class="correction-comment" placeholder="Optionaler Kommentar..."></textarea>
+                <button type="button" class="submit-btn" onclick="submitWrong()" id="submitBtn" disabled>
+                    Hinzulernen
+                </button>
+            </div>
+
+            <!-- Feedback Messages (hidden by default) -->
+            <div id="feedbackSuccess" class="feedback-message">
+                ✓ Feedback gespeichert!
+            </div>
+            <div id="feedbackError" class="feedback-message">
+                ✗ Fehler beim Speichern
+            </div>
+            <?php endif; ?>
+        </div>
+
+        <script>
+        // Current WMO code from PHP
+        const currentWmo = <?= $currentWmo ?>;
+        const hasFeedback = <?= $hasFeedback ? 'true' : 'false' ?>;
+
+        // Only run feedback JS if no feedback yet
+        if (!hasFeedback) {
+            // Populate dropdown with proximity-sorted WMO codes
+            async function loadWmoList() {
+                try {
+                    const response = await fetch('api.php?action=wmo_list');
+                    const data = await response.json();
+
+                    const select = document.getElementById('correctWmo');
+                    if (select) {
+                        data.wmo_codes.forEach(item => {
+                            if (!item.is_current) {
+                                const option = document.createElement('option');
+                                option.value = item.code;
+                                option.textContent = `WMO ${item.code}: ${item.condition.replace(/_/g, ' ')}`;
+                                select.appendChild(option);
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error loading WMO list:', error);
+                }
+            }
+
+            // Enable submit button when WMO selected
+            const correctWmoSelect = document.getElementById('correctWmo');
+            if (correctWmoSelect) {
+                correctWmoSelect.addEventListener('change', function() {
+                    document.getElementById('submitBtn').disabled = !this.value;
+                });
+            }
+
+            // Load WMO list on page load
+            loadWmoList();
+        }
+
+        function showCorrection() {
+            const panel = document.getElementById('correctionPanel');
+            if (panel) panel.classList.add('visible');
+            hideMessages();
+        }
+
+        function hideMessages() {
+            const success = document.getElementById('feedbackSuccess');
+            const error = document.getElementById('feedbackError');
+            if (success) {
+                success.classList.remove('success');
+                success.style.display = 'none';
+            }
+            if (error) {
+                error.classList.remove('error');
+                error.style.display = 'none';
+            }
+        }
+
+        function showSuccess() {
+            hideMessages();
+            const el = document.getElementById('feedbackSuccess');
+            if (el) {
+                el.style.display = 'block';
+                el.classList.add('success');
+            }
+            // Reload page after delay to show "already submitted" state
+            setTimeout(() => location.reload(), 1500);
+        }
+
+        function showError() {
+            hideMessages();
+            const el = document.getElementById('feedbackError');
+            if (el) {
+                el.style.display = 'block';
+                el.classList.add('error');
+            }
+        }
+
+        async function submitCorrect() {
+            try {
+                const response = await fetch('api.php?action=feedback', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({feedback: true})
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess();
+                    const panel = document.getElementById('correctionPanel');
+                    if (panel) panel.classList.remove('visible');
+                } else {
+                    showError();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError();
+            }
+        }
+
+        async function submitWrong() {
+            const correctWmoEl = document.getElementById('correctWmo');
+            const commentEl = document.getElementById('feedbackComment');
+            if (!correctWmoEl) return;
+
+            const correctWmo = correctWmoEl.value;
+            const comment = commentEl ? commentEl.value : '';
+
+            if (!correctWmo) return;
+
+            try {
+                const response = await fetch('api.php?action=feedback', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        feedback: false,
+                        correct_wmo: parseInt(correctWmo),
+                        comment: comment || null
+                    })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccess();
+                } else {
+                    showError();
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showError();
+            }
+        }
+        </script>
+
+        <?php else: ?>
+        <div class="no-data">Keine Wetterdaten verfügbar</div>
+        <?php endif; ?>
+
+        <?php elseif ($activeTab === 'analyse'): ?>
+        <!-- ========== ANALYSE TAB ========== -->
+
+        <div id="analyseContent">
+            <div class="no-data">Lade Analyse-Daten...</div>
+        </div>
+
+        <script>
+        async function loadAnalyseData() {
+            try {
+                const response = await fetch('api.php?action=feedback_stats');
+                const data = await response.json();
+
+                renderAnalyse(data);
+            } catch (error) {
+                console.error('Error loading analyse data:', error);
+                document.getElementById('analyseContent').innerHTML =
+                    '<div class="no-data">Fehler beim Laden der Analyse-Daten</div>';
+            }
+        }
+
+        function renderAnalyse(data) {
+            const container = document.getElementById('analyseContent');
+            const s = data.summary;
+
+            let html = `
+                <div class="section-title">Übersicht</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value">${s.total_readings.toLocaleString('de-DE')}</div>
+                        <div class="stat-label">Messungen</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${s.total_feedback}</div>
+                        <div class="stat-label">Feedbacks</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value good">${s.correct_count}</div>
+                        <div class="stat-label">Richtig</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value bad">${s.wrong_count}</div>
+                        <div class="stat-label">Falsch</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value ${s.accuracy_percent >= 80 ? 'good' : s.accuracy_percent >= 50 ? '' : 'bad'}">
+                            ${s.accuracy_percent !== null ? s.accuracy_percent.toFixed(1).replace('.', ',') + '%' : '—'}
+                        </div>
+                        <div class="stat-label">Genauigkeit</div>
+                    </div>
+                </div>
+            `;
+
+            // Error Analysis Table
+            if (data.error_analysis && data.error_analysis.length > 0) {
+                html += `
+                    <div class="section-title">Fehleranalyse</div>
+                    <table class="error-table">
+                        <thead>
+                            <tr>
+                                <th>Erkannt</th>
+                                <th>Korrekt</th>
+                                <th>Anzahl</th>
+                                <th>Ø Temp</th>
+                                <th>Ø Delta</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                data.error_analysis.forEach(e => {
+                    html += `
+                        <tr>
+                            <td>WMO ${e.original_wmo}<br><small>${e.original_condition.replace(/_/g, ' ')}</small></td>
+                            <td>WMO ${e.corrected_wmo}<br><small>${e.corrected_condition.replace(/_/g, ' ')}</small></td>
+                            <td>${e.error_count}</td>
+                            <td>${e.avg_temp.toFixed(1).replace('.', ',')}°C</td>
+                            <td>${e.avg_delta !== null ? e.avg_delta.toFixed(1).replace('.', ',') + '°C' : '—'}</td>
+                        </tr>
+                    `;
+                });
+                html += '</tbody></table>';
+            }
+
+            // Recommendations
+            if (data.recommendations && data.recommendations.length > 0) {
+                html += `
+                    <div class="section-title">Empfehlungen (min. ${data.min_feedback_for_recommendation} Fehler)</div>
+                    <div class="recommendation-list">
+                `;
+                data.recommendations.forEach((r, i) => {
+                    html += `
+                        <div class="recommendation-item">
+                            <input type="checkbox" class="recommendation-checkbox" id="rec_${i}" data-id="${r.id}" data-param="${r.parameter}" data-value="${r.suggested_value}">
+                            <div class="recommendation-content">
+                                <div class="recommendation-param">${r.parameter}</div>
+                                <div class="recommendation-values">${r.current_value} → <strong>${r.suggested_value}</strong></div>
+                                <div class="recommendation-reason">${r.reason} (${r.error_count}×)</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `
+                    </div>
+                    <button class="apply-btn" onclick="applyRecommendations()" id="applyBtn" disabled>
+                        Ausgewählte Empfehlungen anwenden
+                    </button>
+                    <div id="applyMessage" class="feedback-message"></div>
+                `;
+            } else if (s.wrong_count > 0) {
+                html += `<div class="no-data">Noch keine Empfehlungen (min. ${data.min_feedback_for_recommendation} gleiche Fehler nötig)</div>`;
+            }
+
+            // Recent Feedback
+            if (data.recent_feedback && data.recent_feedback.length > 0) {
+                html += `
+                    <div class="section-title" style="margin-top: 24px;">Letzte Feedbacks</div>
+                    <table class="error-table">
+                        <thead>
+                            <tr>
+                                <th>Zeit</th>
+                                <th>WMO</th>
+                                <th>Feedback</th>
+                                <th>Korrektur</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                data.recent_feedback.forEach(f => {
+                    const time = new Date(f.timestamp).toLocaleString('de-DE', {
+                        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                    });
+                    html += `
+                        <tr>
+                            <td>${time}</td>
+                            <td>${f.wmo_code} (${f.condition.replace(/_/g, ' ')})</td>
+                            <td class="${f.feedback ? 'bool-yes' : 'bool-no'}">${f.feedback ? '✓' : '✗'}</td>
+                            <td>${f.correct_wmo !== null ? f.correct_wmo : '—'}</td>
+                        </tr>
+                    `;
+                });
+                html += '</tbody></table>';
+            }
+
+            container.innerHTML = html;
+
+            // Add checkbox listeners
+            document.querySelectorAll('.recommendation-checkbox').forEach(cb => {
+                cb.addEventListener('change', updateApplyButton);
+            });
+        }
+
+        function updateApplyButton() {
+            const checked = document.querySelectorAll('.recommendation-checkbox:checked').length;
+            const btn = document.getElementById('applyBtn');
+            if (btn) btn.disabled = checked === 0;
+        }
+
+        async function applyRecommendations() {
+            const selected = [];
+            document.querySelectorAll('.recommendation-checkbox:checked').forEach(cb => {
+                selected.push({
+                    id: cb.dataset.id,
+                    parameter: cb.dataset.param,
+                    value: parseFloat(cb.dataset.value)
+                });
+            });
+
+            if (selected.length === 0) return;
+
+            const msgEl = document.getElementById('applyMessage');
+            msgEl.style.display = 'none';
+
+            // Note: Applying recommendations would require server-side config modification
+            // For now, show what would be changed
+            let message = 'Würde ändern:\\n';
+            selected.forEach(s => {
+                message += `${s.parameter} = ${s.value}\\n`;
+            });
+            message += '\\n(Config-Änderung muss manuell erfolgen)';
+
+            alert(message);
+        }
+
+        // Load data on page load
+        loadAnalyseData();
+        </script>
+
         <?php elseif ($activeTab === 'icons'): ?>
         <!-- ========== ICONS TAB ========== -->
 
@@ -778,9 +1628,8 @@ $activeTab = $_GET['tab'] ?? 'weather';
         <?php endif; ?>
 
         <footer>
-            <span>Stand: <?= $current ? formatTimestamp($current['timestamp']) : '—' ?></span>
-            <span><?= formatDE($dbCount, 0) ?> Einträge</span>
-            <span>Refresh: 60s</span>
+            <span><?= number_format($dbStats['count'], 0, ',', '.') ?> Datensätze</span>
+            <span>DB: <?= number_format($dbStats['size_mb'], 1, ',', '.') ?> MB</span>
         </footer>
     </div>
 

@@ -61,6 +61,9 @@ define('SNOW_GRAINS_TEMP', -2.0);  // temp < -2 = snow grains possible
 define('SENSOR1_NAME', 'Therapie');
 define('SENSOR2_NAME', 'WoZi');
 
+// Feedback analysis
+define('MIN_FEEDBACK_FOR_RECOMMENDATION', 3);  // Minimum wrong feedbacks to generate recommendation
+
 // WMO condition names
 define('WMO_CONDITIONS', [
     0 => 'clear',
