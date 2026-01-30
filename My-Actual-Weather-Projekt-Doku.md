@@ -196,6 +196,7 @@ Day/Night wird von API geliefert (`is_daylight` bzw. `dayOrNight`)
 | `api.php?action=feedback` | POST | Feedback speichern (`{feedback: bool, correct_wmo: int, comment: string}`) |
 | `api.php?action=feedback_stats` | GET | Feedback-Statistiken und Empfehlungen |
 | `api.php?action=wmo_list` | GET | WMO-Codes sortiert nach Nähe zum aktuellen |
+| `api.php?action=apply_recommendations` | POST | Schwellwerte in config.php anpassen (mit Backup) |
 
 **Feedback-Datenbank-Spalten:**
 | Spalte | Typ | Beschreibung |

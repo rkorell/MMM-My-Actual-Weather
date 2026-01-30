@@ -270,6 +270,7 @@ The aggregator includes a web dashboard for monitoring and feedback:
 | `api.php?action=feedback` | POST | Save feedback for current reading |
 | `api.php?action=feedback_stats` | GET | Feedback statistics and recommendations |
 | `api.php?action=wmo_list` | GET | WMO codes sorted by proximity to current |
+| `api.php?action=apply_recommendations` | POST | Apply threshold changes to config.php (with backup) |
 
 ## Data Flow
 
