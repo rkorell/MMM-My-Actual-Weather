@@ -12,11 +12,13 @@
  *   ?action=feedback (POST) - Save feedback for current reading
  *   ?action=feedback_stats  - Feedback statistics and recommendations
  *   ?action=wmo_list        - WMO codes sorted by proximity to current
+ *   ?action=apply_recommendations (POST) - Apply threshold recommendations to config
  *
  * Modified: 2026-01-28 - Initial creation (Phase 3)
  * Modified: 2026-01-29 - Added humidity1, humidity2 to current endpoint
  * Modified: 2026-01-30 - Added cloudwatcher_online flag for fallback detection
  * Modified: 2026-01-30 - Added feedback endpoints (feedback, feedback_stats, wmo_list)
+ * Modified: 2026-01-30 - Added apply_recommendations endpoint
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -630,6 +632,106 @@ function generateFogMistRecommendation($original, $corrected, $avgHumidity, $avg
     return null;
 }
 
+/**
+ * Apply threshold recommendations to config.php
+ */
+function applyRecommendations() {
+    $input = json_decode(file_get_contents('php://input'), true);
+
+    if (!$input || !isset($input['recommendations']) || !is_array($input['recommendations'])) {
+        return ['error' => 'recommendations array required'];
+    }
+
+    $recommendations = $input['recommendations'];
+    if (empty($recommendations)) {
+        return ['error' => 'no recommendations to apply'];
+    }
+
+    // Allowed parameters that can be modified
+    $allowedParams = [
+        'THRESHOLD_CLEAR', 'THRESHOLD_MAINLY_CLEAR', 'THRESHOLD_PARTLY_CLOUDY',
+        'DRIZZLE_LIGHT_MAX', 'DRIZZLE_MAX', 'FREEZING_DRIZZLE_DENSE',
+        'RAIN_LIGHT_MAX', 'RAIN_MODERATE_MAX',
+        'FOG_SPREAD_MAX', 'FOG_HUMIDITY_MIN', 'FOG_DELTA_MAX', 'FOG_SPREAD_VETO',
+        'MIST_SPREAD_MAX', 'MIST_HUMIDITY_MIN', 'MIST_HUMIDITY_MAX',
+        'SNOW_TEMP_MAX', 'SLEET_TEMP_MIN', 'SLEET_TEMP_MAX', 'FREEZING_TEMP_MAX',
+        'HAZE_HUMIDITY_MAX', 'HAZE_DELTA_MIN',
+    ];
+
+    $configFile = __DIR__ . '/config.php';
+
+    // Read current config
+    $content = file_get_contents($configFile);
+    if ($content === false) {
+        return ['error' => 'could not read config.php'];
+    }
+
+    // Create backup
+    $backupFile = $configFile . '.backup.' . date('Ymd_His');
+    if (!copy($configFile, $backupFile)) {
+        return ['error' => 'could not create backup'];
+    }
+
+    $applied = [];
+    $errors = [];
+
+    foreach ($recommendations as $rec) {
+        $param = $rec['parameter'] ?? null;
+        $value = $rec['value'] ?? null;
+
+        if (!$param || $value === null) {
+            $errors[] = "Invalid recommendation: missing parameter or value";
+            continue;
+        }
+
+        if (!in_array($param, $allowedParams)) {
+            $errors[] = "Parameter not allowed: $param";
+            continue;
+        }
+
+        // Pattern to match define('PARAM', value);
+        $pattern = "/define\s*\(\s*['\"]" . preg_quote($param, '/') . "['\"]\s*,\s*[^)]+\)/";
+
+        // Determine value format (int or float)
+        $formattedValue = is_float($value) ? number_format($value, 1, '.', '') : intval($value);
+
+        $replacement = "define('$param', $formattedValue)";
+
+        $newContent = preg_replace($pattern, $replacement, $content, 1, $count);
+
+        if ($count > 0) {
+            $content = $newContent;
+            $applied[] = ['parameter' => $param, 'value' => $value];
+        } else {
+            $errors[] = "Parameter not found in config: $param";
+        }
+    }
+
+    // Write updated config
+    if (!empty($applied)) {
+        // Update modification comment
+        $today = date('Y-m-d');
+        $modLine = " * Modified: $today - Threshold adjustment via feedback recommendations";
+
+        // Check if today's modification line already exists
+        if (strpos($content, "Modified: $today") === false) {
+            // Add new modification line before closing comment
+            $content = preg_replace('/(\s*\*\/\s*\n\s*\/\/ Station location)/', "\n$modLine\n */\n\n// Station location", $content);
+        }
+
+        if (file_put_contents($configFile, $content) === false) {
+            return ['error' => 'could not write config.php', 'backup' => $backupFile];
+        }
+    }
+
+    return [
+        'success' => true,
+        'applied' => $applied,
+        'errors' => $errors,
+        'backup' => $backupFile,
+    ];
+}
+
 // Main execution
 try {
     $action = $_GET['action'] ?? 'current';
@@ -667,8 +769,15 @@ try {
             jsonResponse(getWmoList($pdo));
             break;
 
+        case 'apply_recommendations':
+            if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+                errorResponse('POST method required', 405);
+            }
+            jsonResponse(applyRecommendations());
+            break;
+
         default:
-            errorResponse("Unknown action: $action. Valid actions: current, history, raw, status, feedback, feedback_stats, wmo_list");
+            errorResponse("Unknown action: $action. Valid actions: current, history, raw, status, feedback, feedback_stats, wmo_list, apply_recommendations");
     }
 
 } catch (PDOException $e) {

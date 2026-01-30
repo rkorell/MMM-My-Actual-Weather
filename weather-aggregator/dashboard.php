@@ -1532,7 +1532,6 @@ $activeTab = $_GET['tab'] ?? 'weather';
             const selected = [];
             document.querySelectorAll('.recommendation-checkbox:checked').forEach(cb => {
                 selected.push({
-                    id: cb.dataset.id,
                     parameter: cb.dataset.param,
                     value: parseFloat(cb.dataset.value)
                 });
@@ -1541,17 +1540,52 @@ $activeTab = $_GET['tab'] ?? 'weather';
             if (selected.length === 0) return;
 
             const msgEl = document.getElementById('applyMessage');
-            msgEl.style.display = 'none';
+            const btn = document.getElementById('applyBtn');
 
-            // Note: Applying recommendations would require server-side config modification
-            // For now, show what would be changed
-            let message = 'Würde ändern:\\n';
-            selected.forEach(s => {
-                message += `${s.parameter} = ${s.value}\\n`;
-            });
-            message += '\\n(Config-Änderung muss manuell erfolgen)';
+            // Confirm before applying
+            const paramList = selected.map(s => `${s.parameter} = ${s.value}`).join('\n');
+            if (!confirm(`Folgende Schwellwerte ändern?\n\n${paramList}`)) {
+                return;
+            }
 
-            alert(message);
+            btn.disabled = true;
+            btn.textContent = 'Wird angewendet...';
+
+            try {
+                const response = await fetch('api.php?action=apply_recommendations', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({recommendations: selected})
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    msgEl.textContent = `✓ ${data.applied.length} Empfehlung(en) angewendet. Backup: ${data.backup}`;
+                    msgEl.className = 'feedback-message success';
+                    msgEl.style.display = 'block';
+
+                    // Uncheck applied checkboxes
+                    document.querySelectorAll('.recommendation-checkbox:checked').forEach(cb => {
+                        cb.checked = false;
+                    });
+
+                    // Reload analysis after short delay
+                    setTimeout(() => loadAnalyseData(), 2000);
+                } else {
+                    msgEl.textContent = `✗ Fehler: ${data.error}`;
+                    msgEl.className = 'feedback-message error';
+                    msgEl.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                msgEl.textContent = '✗ Fehler beim Anwenden';
+                msgEl.className = 'feedback-message error';
+                msgEl.style.display = 'block';
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Ausgewählte Empfehlungen anwenden';
+            updateApplyButton();
         }
 
         // Load data on page load
