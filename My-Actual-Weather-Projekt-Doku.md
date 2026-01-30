@@ -3,7 +3,7 @@
 **Autor:** Dr. Ralf Korell
 **Modul:** MMM-My-Actual-Weather
 **Status:** Aktiv
-**Letzte Aktualisierung:** 2026-01-29
+**Letzte Aktualisierung:** 2026-01-30 (AP 47)
 
 ---
 
@@ -102,18 +102,26 @@ sensor2Name: "WoZi",
 1. Poll Aggregator-API (alle 60s)
        │
        ▼
-2. Daten OK und < 180s alt?
+2. Daten OK?
        │
-   JA  │  NEIN
-       │    └──► Wunderground Fallback
-       │              ├── PWS API v2 (Messdaten)
-       │              └── v3 API (Icon)
+       ├──► data_age_s > 180s? ────────────► Wunderground Fallback
+       │                                          ├── PWS API v2 (Messdaten)
+       ├──► cloudwatcher_online = false? ──► Wunderground Fallback
+       │                                          └── v3 API (Icon)
        ▼
 3. WMO → Icon Mapping (WmoToWeatherIcon)
        │
        ▼
 4. WEATHER_DATA → Frontend
 ```
+
+### Fallback-Auslöser
+
+| Bedingung | Grund |
+|-----------|-------|
+| `data_age_s > 180` | PWS-Daten zu alt |
+| `cloudwatcher_online = false` | CloudWatcher offline, keine WMO-Ableitung möglich |
+| API-Fehler | Aggregator nicht erreichbar |
 
 ---
 
@@ -132,9 +140,9 @@ Der Aggregator leitet WMO-Codes lokal aus Sensordaten ab. Detaillierte Dokumenta
 | Shallow Fog | 11 | Temp ≤ Dewpoint, Wind < 1 m/s |
 | Fog | 45 | Spread < 1.0, Humidity > 97%, Delta < 5 |
 | Rime Fog | 48 | Fog + Temp < 0°C |
-| Drizzle | 51, 53, 55 | precip_rate < 0.2 mm/h |
-| Freezing Drizzle | 56, 57 | Drizzle + Temp < 0.5°C |
-| Rain | 61, 63, 65 | precip_rate nach Intensität |
+| Drizzle | 51, 53 | rate < 1.0 mm/h (light < 0.2, moderate 0.2-1.0) |
+| Freezing Drizzle | 56, 57 | rate < 1.0 + Temp < 0.5°C (light < 0.5, dense ≥ 0.5) |
+| Rain | 61, 63, 65 | rate ≥ 1.0 mm/h (slight/moderate/heavy) |
 | Freezing Rain | 66, 67 | Rain + Temp < 0.5°C |
 | Sleet | 68, 69 | Niederschlag + Temp 1-3°C |
 | Snow | 71, 73, 75 | Niederschlag + Temp < 1°C |
@@ -164,12 +172,18 @@ Day/Night wird von API geliefert (`is_daylight` bzw. `dayOrNight`)
 | `pws_receiver_post.php` | POST-Handler für Port 8000 |
 | `wmo_derivation.php` | WMO-Code Ableitung aus Sensordaten |
 | `api.php` | JSON-API (current, history, raw, status) |
-| `dashboard.php` | Web-Dashboard mit Charts |
+| `dashboard.php` | Web-Dashboard mit Charts und WMO-Icon-Übersicht |
 | `config.php` | Konfiguration (Schwellwerte, Sensor-Namen) |
 | `db_connect.php` | DB-Credentials (nicht im Git!) |
 
 **Pfad auf Webserver:** `/var/www/weather-api/`
 **Source im Git:** `MMM-My-Actual-Weather/weather-aggregator/`
+
+**Dashboard URLs:**
+| URL | Beschreibung |
+|-----|--------------|
+| `http://172.23.56.196/weather-api/dashboard.php` | Wetter-Übersicht mit Charts |
+| `http://172.23.56.196/weather-api/dashboard.php?tab=icons` | WMO-Icon-Übersicht (alle Mappings) |
 
 ---
 
@@ -226,6 +240,7 @@ curl -X POST "http://172.23.56.196:8000/data/report/" \
 | 4 | 2026-01-18 | Dual Weather Provider (WUnderground/OpenMeteo), SunCalc entfernt |
 | 44 | 2026-01-25 | CloudWatcher-Integration vorbereitet |
 | 46 | 2026-01-28 | Weather-Aggregator implementiert, PWS-Server entfernt, Wunderground-Fallback |
+| 47 | 2026-01-30 | WMO 55 Icon-Fix, CloudWatcher-Offline-Fallback, Double-Reload-Fix, CSS-Mapping-Korrekturen, Dashboard WMO-Icons-Tab |
 
 ---
 

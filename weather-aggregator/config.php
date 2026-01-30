@@ -7,6 +7,7 @@
  *
  * Modified: 2026-01-28 - Initial creation
  * Modified: 2026-01-29 - Added thresholds for WMO 04, 10, 11, 48, 57, 67, 68, 77
+ * Modified: 2026-01-30 - Drizzle thresholds: DRIZZLE_LIGHT_MAX, DRIZZLE_MAX, FREEZING_DRIZZLE_DENSE
  */
 
 // Station location
@@ -25,9 +26,11 @@ define('THRESHOLD_PARTLY_CLOUDY', 8);  // delta > 8 = partly cloudy (WMO 2)
 // delta <= 8 = overcast (WMO 3)
 
 // Rain/Drizzle intensity thresholds (mm/h)
-define('DRIZZLE_MAX', 0.2);       // < 0.2 = drizzle (very fine drops)
-define('RAIN_LIGHT_MAX', 2.5);    // < 2.5 = light rain
-define('RAIN_MODERATE_MAX', 7.5); // < 7.5 = moderate, >= 7.5 = heavy
+define('DRIZZLE_LIGHT_MAX', 0.2);    // < 0.2 = drizzle light (WMO 51)
+define('DRIZZLE_MAX', 1.0);          // < 1.0 = drizzle moderate (WMO 53), >= 1.0 = rain
+define('FREEZING_DRIZZLE_DENSE', 0.5); // >= 0.5 = freezing drizzle dense (WMO 57)
+define('RAIN_LIGHT_MAX', 2.5);       // < 2.5 = light rain
+define('RAIN_MODERATE_MAX', 7.5);    // < 7.5 = moderate, >= 7.5 = heavy
 
 // Fog detection (strict thresholds)
 define('FOG_SPREAD_MAX', 1.0);     // temp - dewpoint < 1.0

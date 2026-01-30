@@ -3,11 +3,14 @@
  * Weather Dashboard
  *
  * Web dashboard showing current weather data and 24h temperature chart.
+ * Tab 2: WMO Icon Overview
  *
  * Modified: 2026-01-28 - Initial creation
  * Modified: 2026-01-29 - Added indoor humidity, pressure, dewpoint display
  * Modified: 2026-01-29 - Added weather icons and German condition names
  * Modified: 2026-01-29 - Added icon mappings for WMO 4, 10, 11, 68, 69
+ * Modified: 2026-01-30 - Fixed WMO 55 icon mapping (was freezing, should be normal drizzle)
+ * Modified: 2026-01-30 - Added WMO Icon Overview tab with wi-class mappings
  */
 
 require_once __DIR__ . '/db_connect.php';
@@ -60,45 +63,54 @@ function formatDE($value, $decimals = 1) {
 }
 
 /**
- * WMO Code to weather icon filename mapping
- * Based on node_helper.js WmoToWeatherIcon + custom.css mappings
- * Format: [day_icon, night_icon]
+ * Complete WMO mapping with wi-class and PNG filenames
+ * Format: [wmo_code => [name_en, name_de, wi_day, wi_night, png_day, png_night, derivable]]
  */
-$wmoToIcon = [
-    0  => ['wsymbol_0001_sunny.png', 'wsymbol_0008_clear_sky_night.png'],
-    1  => ['wsymbol_0002_sunny_intervals.png', 'wsymbol_0041_partly_cloudy_night.png'],
-    2  => ['wsymbol_0043_mostly_cloudy.png', 'wsymbol_0042_cloudy_night.png'],
-    3  => ['wsymbol_0003_white_cloud.png', 'wsymbol_0042_cloudy_night.png'],
-    4  => ['wsymbol_0005_hazy_sun.png', 'wsymbol_0063_mist_night.png'],           // Haze
-    10 => ['wsymbol_0006_mist.png', 'wsymbol_0063_mist_night.png'],               // Mist
-    11 => ['wsymbol_0007_fog.png', 'wsymbol_0064_fog_night.png'],                 // Shallow fog
-    45 => ['wsymbol_0007_fog.png', 'wsymbol_0064_fog_night.png'],
-    48 => ['wsymbol_0047_freezing_fog.png', 'wsymbol_0065_freezing_fog_night.png'],
-    51 => ['wsymbol_0048_drizzle.png', 'wsymbol_0066_drizzle_night.png'],
-    53 => ['wsymbol_0081_heavy_drizzle.png', 'wsymbol_0082_heavy_drizzle_night.png'],
-    55 => ['wsymbol_0083_heavy_freezing_drizzle.png', 'wsymbol_0084_heavy_freezing_drizzle_night.png'],
-    56 => ['wsymbol_0049_freezing_drizzle.png', 'wsymbol_0067_freezing_drizzle_night.png'],
-    57 => ['wsymbol_0083_heavy_freezing_drizzle.png', 'wsymbol_0084_heavy_freezing_drizzle_night.png'],
-    61 => ['wsymbol_0009_light_rain_showers.png', 'wsymbol_0025_light_rain_showers_night.png'],
-    63 => ['wsymbol_0010_heavy_rain_showers.png', 'wsymbol_0026_heavy_rain_showers_night.png'],
-    65 => ['wsymbol_0051_extreme_rain.png', 'wsymbol_0069_extreme_rain_night.png'],
-    66 => ['wsymbol_0050_freezing_rain.png', 'wsymbol_0068_freezing_rain_night.png'],
-    67 => ['wsymbol_0050_freezing_rain.png', 'wsymbol_0068_freezing_rain_night.png'],
-    68 => ['wsymbol_0013_sleet_showers.png', 'wsymbol_0029_sleet_showers_night.png'],           // Sleet light
-    69 => ['wsymbol_0087_heavy_sleet_showers.png', 'wsymbol_0088_heavy_sleet_showers_night.png'], // Sleet heavy
-    71 => ['wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png'],
-    73 => ['wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png'],
-    75 => ['wsymbol_0053_blowing_snow.png', 'wsymbol_0028_heavy_snow_showers_night.png'],
-    77 => ['wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png'],
-    80 => ['wsymbol_0017_cloudy_with_light_rain.png', 'wsymbol_0025_light_rain_showers_night.png'],
-    81 => ['wsymbol_0018_cloudy_with_heavy_rain.png', 'wsymbol_0026_heavy_rain_showers_night.png'],
-    82 => ['wsymbol_0051_extreme_rain.png', 'wsymbol_0069_extreme_rain_night.png'],
-    85 => ['wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png'],
-    86 => ['wsymbol_0053_blowing_snow.png', 'wsymbol_0028_heavy_snow_showers_night.png'],
-    95 => ['wsymbol_0024_thunderstorms.png', 'wsymbol_0032_thundery_showers_night.png'],
-    96 => ['wsymbol_0059_thunderstorms_with_hail.png', 'wsymbol_0077_thunderstorms_with_hail_night.png'],
-    99 => ['wsymbol_0059_thunderstorms_with_hail.png', 'wsymbol_0077_thunderstorms_with_hail_night.png'],
+$wmoMapping = [
+    // Derivable from sensors (used)
+    0  => ['Clear Sky', 'Klar', 'wi-day-sunny', 'wi-night-clear', 'wsymbol_0001_sunny.png', 'wsymbol_0008_clear_sky_night.png', true],
+    1  => ['Mainly Clear', 'Überwiegend klar', 'wi-day-sunny-overcast', 'wi-night-partly-cloudy', 'wsymbol_0002_sunny_intervals.png', 'wsymbol_0041_partly_cloudy_night.png', true],
+    2  => ['Partly Cloudy', 'Teilweise bewölkt', 'wi-day-cloudy', 'wi-night-cloudy', 'wsymbol_0043_mostly_cloudy.png', 'wsymbol_0042_cloudy_night.png', true],
+    3  => ['Overcast', 'Bedeckt', 'wi-day-cloudy-high', 'wi-night-cloudy-high', 'wsymbol_0003_white_cloud.png', 'wsymbol_0042_cloudy_night.png', true],
+    4  => ['Haze', 'Dunst', 'wi-day-haze', 'wi-mist-night', 'wsymbol_0005_hazy_sun.png', 'wsymbol_0063_mist_night.png', true],
+    10 => ['Mist', 'Feuchter Dunst', 'wi-mist', 'wi-mist-night', 'wsymbol_0006_mist.png', 'wsymbol_0063_mist_night.png', true],
+    11 => ['Shallow Fog', 'Flacher Bodennebel', 'wi-fog', 'wi-fog-night', 'wsymbol_0007_fog.png', 'wsymbol_0064_fog_night.png', true],
+    45 => ['Fog', 'Nebel', 'wi-day-fog', 'wi-night-fog', 'wsymbol_0007_fog.png', 'wsymbol_0064_fog_night.png', true],
+    48 => ['Depositing Rime Fog', 'Reifnebel', 'wi-freezing-fog', 'wi-freezing-fog-night', 'wsymbol_0047_freezing_fog.png', 'wsymbol_0065_freezing_fog_night.png', true],
+    51 => ['Light Drizzle', 'Leichter Nieselregen', 'wi-drizzle', 'wi-drizzle-night', 'wsymbol_0048_drizzle.png', 'wsymbol_0066_drizzle_night.png', true],
+    53 => ['Moderate Drizzle', 'Nieselregen', 'wi-heavy-drizzle', 'wi-heavy-drizzle-night', 'wsymbol_0081_heavy_drizzle.png', 'wsymbol_0082_heavy_drizzle_night.png', true],
+    55 => ['Dense Drizzle', 'Starker Nieselregen', 'wi-heavy-drizzle', 'wi-heavy-drizzle-night', 'wsymbol_0081_heavy_drizzle.png', 'wsymbol_0082_heavy_drizzle_night.png', false], // Not actively used (same icon as 53)
+    56 => ['Light Freezing Drizzle', 'Gefrierender Niesel', 'wi-freezing-drizzle', 'wi-freezing-drizzle-night', 'wsymbol_0049_freezing_drizzle.png', 'wsymbol_0067_freezing_drizzle_night.png', true],
+    57 => ['Dense Freezing Drizzle', 'Starker gefr. Niesel', 'wi-heavy-freezing-drizzle', 'wi-heavy-freezing-drizzle-night', 'wsymbol_0083_heavy_freezing_drizzle.png', 'wsymbol_0084_heavy_freezing_drizzle_night.png', true],
+    61 => ['Slight Rain', 'Leichter Regen', 'wi-day-rain-mix', 'wi-night-rain-mix', 'wsymbol_0009_light_rain_showers.png', 'wsymbol_0025_light_rain_showers_night.png', true],
+    63 => ['Moderate Rain', 'Regen', 'wi-day-rain', 'wi-night-rain', 'wsymbol_0010_heavy_rain_showers.png', 'wsymbol_0026_heavy_rain_showers_night.png', true],
+    65 => ['Heavy Rain', 'Starkregen', 'wi-extreme-rain', 'wi-extreme-rain-night', 'wsymbol_0051_extreme_rain.png', 'wsymbol_0069_extreme_rain_night.png', true],
+    66 => ['Light Freezing Rain', 'Gefrierender Regen', 'wi-freezing-rain', 'wi-freezing-rain-night', 'wsymbol_0050_freezing_rain.png', 'wsymbol_0068_freezing_rain_night.png', true],
+    67 => ['Heavy Freezing Rain', 'Starker gefr. Regen', 'wi-freezing-rain', 'wi-freezing-rain-night', 'wsymbol_0050_freezing_rain.png', 'wsymbol_0068_freezing_rain_night.png', true],
+    68 => ['Slight Sleet', 'Leichter Schneeregen', 'wi-day-sleet', 'wi-night-sleet', 'wsymbol_0013_sleet_showers.png', 'wsymbol_0029_sleet_showers_night.png', true],
+    69 => ['Heavy Sleet', 'Schneeregen', 'wi-day-sleet-storm', 'wi-night-sleet-storm', 'wsymbol_0087_heavy_sleet_showers.png', 'wsymbol_0088_heavy_sleet_showers_night.png', true],
+    71 => ['Slight Snow', 'Leichter Schneefall', 'wi-day-snow', 'wi-night-snow', 'wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png', true],
+    73 => ['Moderate Snow', 'Schneefall', 'wi-day-snow', 'wi-night-snow', 'wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png', true],
+    75 => ['Heavy Snow', 'Starker Schneefall', 'wi-day-snow-wind', 'wi-night-snow-wind', 'wsymbol_0053_blowing_snow.png', 'wsymbol_0028_heavy_snow_showers_night.png', true],
+    77 => ['Snow Grains', 'Schneegriesel', 'wi-day-snow', 'wi-night-snow', 'wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png', true],
+    // Not derivable (no sensor data available)
+    80 => ['Slight Rain Showers', 'Leichte Schauer', 'wi-day-showers', 'wi-night-showers', 'wsymbol_0017_cloudy_with_light_rain.png', 'wsymbol_0025_light_rain_showers_night.png', false],
+    81 => ['Moderate Rain Showers', 'Regenschauer', 'wi-day-storm-showers', 'wi-night-storm-showers', 'wsymbol_0018_cloudy_with_heavy_rain.png', 'wsymbol_0026_heavy_rain_showers_night.png', false],
+    82 => ['Violent Rain Showers', 'Heftige Schauer', 'wi-extreme-rain', 'wi-extreme-rain-night', 'wsymbol_0051_extreme_rain.png', 'wsymbol_0069_extreme_rain_night.png', false],
+    85 => ['Slight Snow Showers', 'Leichte Schneeschauer', 'wi-day-snow', 'wi-night-snow', 'wsymbol_0011_light_snow_showers.png', 'wsymbol_0027_light_snow_showers_night.png', false],
+    86 => ['Heavy Snow Showers', 'Schneeschauer', 'wi-day-snow-wind', 'wi-night-snow-wind', 'wsymbol_0053_blowing_snow.png', 'wsymbol_0028_heavy_snow_showers_night.png', false],
+    95 => ['Thunderstorm', 'Gewitter', 'wi-day-thunderstorm', 'wi-night-thunderstorm', 'wsymbol_0024_thunderstorms.png', 'wsymbol_0032_thundery_showers_night.png', false],
+    96 => ['Thunderstorm + Slight Hail', 'Gewitter mit Hagel', 'wi-thunderstorms-with-hail', 'wi-thunderstorms-with-hail-night', 'wsymbol_0059_thunderstorms_with_hail.png', 'wsymbol_0077_thunderstorms_with_hail_night.png', false],
+    99 => ['Thunderstorm + Heavy Hail', 'Gewitter mit Hagel', 'wi-thunderstorms-with-hail', 'wi-thunderstorms-with-hail-night', 'wsymbol_0059_thunderstorms_with_hail.png', 'wsymbol_0077_thunderstorms_with_hail_night.png', false],
 ];
+
+/**
+ * Legacy mappings for backward compatibility
+ */
+$wmoToIcon = [];
+foreach ($wmoMapping as $code => $data) {
+    $wmoToIcon[$code] = [$data[4], $data[5]];
+}
 
 /**
  * Condition string to German translation
@@ -180,6 +192,9 @@ foreach ($history as $row) {
     $chartSensor1[] = $row['temp1_c'];
     $chartSensor2[] = $row['temp2_c'];
 }
+
+// Current tab
+$activeTab = $_GET['tab'] ?? 'weather';
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -255,6 +270,35 @@ foreach ($history as $row) {
         .status-dot.online {
             background: var(--success);
             box-shadow: 0 0 8px var(--success);
+        }
+
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid var(--bg-card);
+            padding-bottom: 0;
+        }
+
+        .tab-nav a {
+            padding: 12px 24px;
+            text-decoration: none;
+            color: var(--text-secondary);
+            background: var(--bg-card);
+            border-radius: 8px 8px 0 0;
+            transition: all 0.2s;
+        }
+
+        .tab-nav a:hover {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+        }
+
+        .tab-nav a.active {
+            background: var(--accent);
+            color: var(--bg-primary);
+            font-weight: 600;
         }
 
         .card-grid {
@@ -357,6 +401,100 @@ foreach ($history as $row) {
             color: var(--text-secondary);
         }
 
+        /* Icon Overview Table */
+        .icon-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 32px;
+            background: var(--bg-card);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .icon-table th {
+            background: var(--accent-dim);
+            color: var(--text-primary);
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+
+        .icon-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--bg-primary);
+            vertical-align: top;
+        }
+
+        .icon-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .icon-table tr:hover td {
+            background: var(--bg-card-hover);
+        }
+
+        .wmo-code {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .wmo-name {
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            margin-top: 4px;
+        }
+
+        .wi-class {
+            font-family: 'Courier New', monospace;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .icon-cell {
+            text-align: center;
+        }
+
+        .icon-cell img {
+            width: 64px;
+            height: 64px;
+        }
+
+        .icon-filename {
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            word-break: break-all;
+        }
+
+        .not-derivable {
+            /* No opacity - icons should be clearly visible */
+        }
+
+        .derivable-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            margin-top: 6px;
+        }
+
+        .derivable-badge.yes {
+            background: var(--success);
+            color: var(--bg-primary);
+        }
+
+        .derivable-badge.no {
+            background: var(--text-secondary);
+            color: var(--bg-primary);
+        }
+
         @media (max-width: 600px) {
             body {
                 padding: 12px;
@@ -364,6 +502,11 @@ foreach ($history as $row) {
 
             h1 {
                 font-size: 1.4rem;
+            }
+
+            .tab-nav a {
+                padding: 10px 16px;
+                font-size: 0.9rem;
             }
 
             .card-grid {
@@ -395,6 +538,20 @@ foreach ($history as $row) {
                 flex-direction: column;
                 text-align: center;
             }
+
+            .icon-table th,
+            .icon-table td {
+                padding: 8px;
+            }
+
+            .icon-cell img {
+                width: 48px;
+                height: 48px;
+            }
+
+            .icon-filename {
+                font-size: 0.75rem;
+            }
         }
     </style>
 </head>
@@ -407,6 +564,15 @@ foreach ($history as $row) {
                 <span><?= $isOnline ? 'Online' : 'Offline' ?></span>
             </div>
         </header>
+
+        <!-- Tab Navigation -->
+        <nav class="tab-nav">
+            <a href="?tab=weather" class="<?= $activeTab === 'weather' ? 'active' : '' ?>">Wetter</a>
+            <a href="?tab=icons" class="<?= $activeTab === 'icons' ? 'active' : '' ?>">WMO Icons</a>
+        </nav>
+
+        <?php if ($activeTab === 'weather'): ?>
+        <!-- ========== WEATHER TAB ========== -->
 
         <?php if ($current): ?>
 
@@ -542,6 +708,75 @@ foreach ($history as $row) {
         </div>
         <?php endif; ?>
 
+        <?php elseif ($activeTab === 'icons'): ?>
+        <!-- ========== ICONS TAB ========== -->
+
+        <div class="section-title">Aktiv genutzte WMO Codes (aus Sensordaten ableitbar)</div>
+        <table class="icon-table">
+            <thead>
+                <tr>
+                    <th style="width: 35%;">WMO Code / Name / wi-Klasse</th>
+                    <th style="width: 32.5%;">Tag</th>
+                    <th style="width: 32.5%;">Nacht</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($wmoMapping as $code => $data): ?>
+                <?php if ($data[6]): // derivable ?>
+                <tr>
+                    <td>
+                        <div class="wmo-code"><?= $code ?></div>
+                        <div class="wmo-name"><?= htmlspecialchars($data[1]) ?></div>
+                        <div class="wi-class"><?= htmlspecialchars($data[2]) ?> / <?= htmlspecialchars($data[3]) ?></div>
+                    </td>
+                    <td class="icon-cell">
+                        <img src="icons/<?= htmlspecialchars($data[4]) ?>" alt="<?= htmlspecialchars($data[0]) ?>">
+                        <div class="icon-filename"><?= htmlspecialchars($data[4]) ?></div>
+                    </td>
+                    <td class="icon-cell">
+                        <img src="icons/<?= htmlspecialchars($data[5]) ?>" alt="<?= htmlspecialchars($data[0]) ?> Night">
+                        <div class="icon-filename"><?= htmlspecialchars($data[5]) ?></div>
+                    </td>
+                </tr>
+                <?php endif; ?>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+
+        <div class="section-title">Nicht ableitbare WMO Codes (kein Sensor verfügbar)</div>
+        <table class="icon-table">
+            <thead>
+                <tr>
+                    <th style="width: 35%;">WMO Code / Name / wi-Klasse</th>
+                    <th style="width: 32.5%;">Tag</th>
+                    <th style="width: 32.5%;">Nacht</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($wmoMapping as $code => $data): ?>
+                <?php if (!$data[6]): // not derivable ?>
+                <tr class="not-derivable">
+                    <td>
+                        <div class="wmo-code"><?= $code ?></div>
+                        <div class="wmo-name"><?= htmlspecialchars($data[1]) ?></div>
+                        <div class="wi-class"><?= htmlspecialchars($data[2]) ?> / <?= htmlspecialchars($data[3]) ?></div>
+                    </td>
+                    <td class="icon-cell">
+                        <img src="icons/<?= htmlspecialchars($data[4]) ?>" alt="<?= htmlspecialchars($data[0]) ?>">
+                        <div class="icon-filename"><?= htmlspecialchars($data[4]) ?></div>
+                    </td>
+                    <td class="icon-cell">
+                        <img src="icons/<?= htmlspecialchars($data[5]) ?>" alt="<?= htmlspecialchars($data[0]) ?> Night">
+                        <div class="icon-filename"><?= htmlspecialchars($data[5]) ?></div>
+                    </td>
+                </tr>
+                <?php endif; ?>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+
+        <?php endif; ?>
+
         <footer>
             <span>Stand: <?= $current ? formatTimestamp($current['timestamp']) : '—' ?></span>
             <span><?= formatDE($dbCount, 0) ?> Einträge</span>
@@ -549,6 +784,7 @@ foreach ($history as $row) {
         </footer>
     </div>
 
+    <?php if ($activeTab === 'weather'): ?>
     <script>
         // Common chart options
         const commonOptions = {
@@ -668,5 +904,6 @@ foreach ($history as $row) {
             location.reload();
         }, 60000);
     </script>
+    <?php endif; ?>
 </body>
 </html>

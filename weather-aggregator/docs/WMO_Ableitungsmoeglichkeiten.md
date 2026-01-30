@@ -333,15 +333,17 @@ Bedingung:
 - WMO 48: Reifnebel (Nebelbedingungen + temp < 0°C)
 - **Fog VETO:** spread > 3.0 → kein Nebel möglich
 
-**Nieselregen:**
-- WMO 51: Niesel leicht (rate < 0.2 mm/h, temp ≥ 3°C)
-- WMO 53: Niesel mäßig
-- WMO 55: Niesel stark
-- WMO 56: Gefrierender Niesel leicht (temp < 0.5°C)
-- WMO 57: Gefrierender Niesel stark (temp < 0.5°C, humidity > 95%)
+**Nieselregen (temp ≥ 3°C, rate < 1.0 mm/h):**
+- WMO 51: Niesel leicht (rate < 0.2 mm/h)
+- WMO 53: Niesel mäßig (rate 0.2-1.0 mm/h)
+- ~~WMO 55~~: Nicht verwendet (gleiche Icon wie 53)
 
-**Regen:**
-- WMO 61: Regen leicht (rate < 2.5 mm/h)
+**Gefrierender Nieselregen (temp < 0.5°C, rate < 1.0 mm/h):**
+- WMO 56: Gefrierender Niesel leicht (rate < 0.5 mm/h)
+- WMO 57: Gefrierender Niesel stark (rate ≥ 0.5 mm/h)
+
+**Regen (rate ≥ 1.0 mm/h):**
+- WMO 61: Regen leicht (rate 1.0-2.5 mm/h)
 - WMO 63: Regen mäßig (rate < 7.5 mm/h)
 - WMO 65: Regen stark (rate ≥ 7.5 mm/h)
 - WMO 66: Gefrierender Regen leicht (temp < 0.5°C)
@@ -372,7 +374,7 @@ Bedingung:
 
 ## Schwellwerte (config.php)
 
-### Aktuelle Werte (Stand 2026-01-29)
+### Aktuelle Werte (Stand 2026-01-30)
 
 ```php
 // Bewölkungs-Schwellen (optimiert)
@@ -382,7 +384,9 @@ define('THRESHOLD_PARTLY_CLOUDY', 8);  // delta > 8 = teilweise bewölkt (WMO 2)
                                        // delta ≤ 8 = bedeckt (WMO 3)
 
 // Niederschlags-Intensität
-define('DRIZZLE_MAX', 0.2);            // < 0.2 mm/h = Niesel
+define('DRIZZLE_LIGHT_MAX', 0.2);      // < 0.2 mm/h = Niesel leicht (WMO 51)
+define('DRIZZLE_MAX', 1.0);            // < 1.0 mm/h = Niesel, >= 1.0 = Regen
+define('FREEZING_DRIZZLE_DENSE', 0.5); // >= 0.5 mm/h = gefr. Niesel stark (WMO 57)
 define('RAIN_LIGHT_MAX', 2.5);         // < 2.5 mm/h = leicht
 define('RAIN_MODERATE_MAX', 7.5);      // < 7.5 mm/h = mäßig, >= 7.5 = stark
 
@@ -646,8 +650,8 @@ if ($is_drizzle || $precip_rate < 0.2) {
 | 1 | Shallow Fog selten erkannt | Niedrig | ⚠️ Akzeptabel |
 | 2 | Snow Grains restriktiv | Niedrig | ⚠️ Wahrscheinlich korrekt |
 | 3 | Freezing Drizzle dense Logik | Niedrig | ⚠️ Überdenken |
-| 4 | Kein Drizzle moderate/dense | Mittel | ⚠️ Feature-Lücke |
-| 5 | Delta null → kein WMO | Mittel | ⚠️ Fallback fehlt |
+| 4 | ~~Kein Drizzle moderate/dense~~ | - | ✅ Behoben (2026-01-30) |
+| 5 | ~~Delta null → kein WMO~~ | - | ✅ Behoben (Wunderground-Fallback) |
 | 6 | Niederschlag vor Nebel | - | ✅ Korrekt |
 
 ---
@@ -666,3 +670,5 @@ if ($is_drizzle || $precip_rate < 0.2) {
 |-------|----------|
 | 2026-01-29 | Initiale Erstellung der Dokumentation |
 | 2026-01-29 | Implementierung WMO 04, 10, 11, 48, 57, 67, 68, 69, 77; strikte Nebel-Schwellen; optimierte Delta-Schwellen |
+| 2026-01-30 | Drizzle-Schwellwerte: light < 0.2, moderate 0.2-1.0, rain >= 1.0 mm/h |
+| 2026-01-30 | CloudWatcher-Fallback: `cloudwatcher_online` API-Feld, Wunderground-Fallback bei Ausfall |

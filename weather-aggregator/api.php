@@ -12,6 +12,7 @@
  *
  * Modified: 2026-01-28 - Initial creation (Phase 3)
  * Modified: 2026-01-29 - Added humidity1, humidity2 to current endpoint
+ * Modified: 2026-01-30 - Added cloudwatcher_online flag for fallback detection
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -78,6 +79,7 @@ function getCurrentWeather($pdo) {
         'condition' => $row['condition'],
         'is_raining' => $row['cw_is_raining'] === 't' || $row['cw_is_raining'] === true,
         'is_daylight' => $row['cw_is_daylight'] === 't' || $row['cw_is_daylight'] === true,
+        'cloudwatcher_online' => $row['sky_temp_c'] !== null,  // CW offline if no sky_temp
         'data_age_s' => $age_seconds,
     ];
 }

@@ -174,9 +174,9 @@ The weather aggregator derives WMO codes locally from sensor data. For detailed 
 | Shallow Fog | 11 | Temp ≤ Dewpoint AND Wind < 1 m/s |
 | Fog | 45 | Spread < 1°C AND Humidity > 97% AND Delta < 5°C |
 | Rime Fog | 48 | Fog conditions AND Temp < 0°C |
-| Drizzle | 51, 53, 55 | Precip rate < 0.2 mm/h |
-| Freezing Drizzle | 56, 57 | Drizzle AND Temp < 0.5°C |
-| Rain | 61, 63, 65 | Precipitation rate by intensity |
+| Drizzle | 51, 53 | Precip rate < 1.0 mm/h (light < 0.2, moderate 0.2-1.0) |
+| Freezing Drizzle | 56, 57 | Drizzle AND Temp < 0.5°C (light < 0.5, dense >= 0.5) |
+| Rain | 61, 63, 65 | Precip rate >= 1.0 mm/h (slight/moderate/heavy) |
 | Freezing Rain | 66, 67 | Rain AND Temp < 0.5°C |
 | Sleet | 68, 69 | Precipitation AND Temp 1-3°C |
 | Snow | 71, 73, 75 | Precipitation AND Temp < 1°C |
@@ -211,9 +211,20 @@ The module expects the following JSON structure from the aggregator API:
     "condition": "overcast",
     "is_raining": false,
     "is_daylight": true,
+    "cloudwatcher_online": true,
     "data_age_s": 15
 }
 ```
+
+### Fallback Logic
+
+The module uses Wunderground as fallback in these cases:
+
+1. **Data too old**: `data_age_s > aggregatorFallbackTimeout` (default 180s)
+2. **CloudWatcher offline**: `cloudwatcher_online = false` (no WMO derivation possible)
+3. **Aggregator unreachable**: Network error or API error
+
+When fallback is triggered, the module fetches weather data and icons from the Wunderground API instead.
 
 ## Weather Aggregator Setup
 
@@ -226,7 +237,7 @@ The weather aggregator is a separate PHP application that runs on a webserver. S
 | `pws_receiver.php` | Receives PWS push data, fetches CloudWatcher, stores to DB |
 | `wmo_derivation.php` | WMO code derivation logic |
 | `api.php` | JSON API for MagicMirror |
-| `dashboard.php` | Web dashboard with charts |
+| `dashboard.php` | Web dashboard with charts and WMO icon overview |
 | `config.php` | Configuration (thresholds, URLs) |
 | `db_connect.php` | Database credentials (not in Git) |
 
@@ -237,6 +248,15 @@ The weather aggregator is a separate PHP application that runs on a webserver. S
 3. Run `setup/schema.sql` to create tables
 4. Copy `db_connect.example` to `db_connect.php` and enter credentials
 5. Configure your PWS to push to `http://YOUR_SERVER/weather-api/pws_receiver.php`
+
+### Dashboard
+
+The aggregator includes a web dashboard for monitoring:
+
+| URL | Description |
+|-----|-------------|
+| `/weather-api/dashboard.php` | Weather overview with 24h charts |
+| `/weather-api/dashboard.php?tab=icons` | WMO icon reference (all mappings) |
 
 ## Data Flow
 
@@ -300,6 +320,7 @@ curl -s "http://CLOUDWATCHER_IP:5000/api/data" | jq
 
 | Date | Description |
 |------|-------------|
+| 2026-01-30 | CloudWatcher offline fallback, WMO icon mapping fixes, Dashboard WMO Icons tab |
 | 2026-01-28 | Switched to Weather-Aggregator architecture |
 | 2026-01-29 | Added dewpoint calculation, pressure QNH, indoor humidity |
 | 2026-01-18 | Dual weather provider support (WUnderground/OpenMeteo) |

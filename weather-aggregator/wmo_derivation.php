@@ -8,6 +8,7 @@
  * Modified: 2026-01-28 - Initial creation
  * Modified: 2026-01-29 - Extended with WMO 04, 10, 11, 48, 57, 67, 68, 77
  *                        Stricter fog thresholds, finer cloud thresholds
+ * Modified: 2026-01-30 - Drizzle thresholds: light < 0.2, moderate 0.2-1.0, rain >= 1.0 mm/h
  */
 
 require_once __DIR__ . '/config.php';
@@ -124,24 +125,29 @@ function derive_wmo_code($pws, $cw) {
 
 /**
  * Derive precipitation WMO code
+ *
+ * Drizzle thresholds:
+ *   < 0.2 mm/h = light (WMO 51/56)
+ *   0.2 - 1.0 mm/h = moderate (WMO 53) or dense freezing (WMO 57)
+ *   >= 1.0 mm/h = rain (WMO 61+)
  */
 function derive_precipitation_code($temp, $humidity, $precip_rate, $cw_is_raining, $result) {
-    // Determine if it's drizzle (very light, CW detects but PWS barely registers)
-    $is_drizzle = $cw_is_raining && ($precip_rate < DRIZZLE_MAX);
+    // Determine if it's drizzle (CW detects but PWS barely registers)
+    $is_light_drizzle = $cw_is_raining && ($precip_rate < DRIZZLE_LIGHT_MAX);
 
     // Freezing precipitation (temp < 0.5°C)
     if ($temp < FREEZING_TEMP_MAX) {
-        if ($is_drizzle || $precip_rate < DRIZZLE_MAX) {
-            // Freezing drizzle
-            if ($precip_rate < DRIZZLE_MAX && $humidity !== null && $humidity > 95) {
-                $result['wmo_code'] = 57;  // Freezing drizzle, dense
+        if ($precip_rate < DRIZZLE_MAX) {
+            // Freezing drizzle (rate < 1.0 mm/h)
+            if ($precip_rate >= FREEZING_DRIZZLE_DENSE) {
+                $result['wmo_code'] = 57;  // Freezing drizzle, dense (>= 0.5 mm/h)
                 $result['condition'] = 'freezing_drizzle_dense';
             } else {
-                $result['wmo_code'] = 56;  // Freezing drizzle, light
+                $result['wmo_code'] = 56;  // Freezing drizzle, light (< 0.5 mm/h)
                 $result['condition'] = 'freezing_drizzle_light';
             }
         } else {
-            // Freezing rain
+            // Freezing rain (rate >= 1.0 mm/h)
             if ($precip_rate >= RAIN_LIGHT_MAX) {
                 $result['wmo_code'] = 67;  // Freezing rain, heavy
                 $result['condition'] = 'freezing_rain_heavy';
@@ -155,8 +161,8 @@ function derive_precipitation_code($temp, $humidity, $precip_rate, $cw_is_rainin
 
     // Snow (temp < 1°C)
     if ($temp < SNOW_TEMP_MAX) {
-        if ($precip_rate < DRIZZLE_MAX && $temp < SNOW_GRAINS_TEMP) {
-            // Snow grains (very light, very cold)
+        if ($precip_rate < DRIZZLE_LIGHT_MAX && $temp < SNOW_GRAINS_TEMP) {
+            // Snow grains (very light < 0.2 mm/h, very cold < -2°C)
             $result['wmo_code'] = 77;
             $result['condition'] = 'snow_grains';
         } elseif ($precip_rate < RAIN_LIGHT_MAX) {
@@ -185,20 +191,25 @@ function derive_precipitation_code($temp, $humidity, $precip_rate, $cw_is_rainin
     }
 
     // Rain or drizzle (temp >= 3°C)
-    if ($is_drizzle) {
-        $result['wmo_code'] = 51;  // Drizzle, light
+    if ($is_light_drizzle || $precip_rate < DRIZZLE_LIGHT_MAX) {
+        // Drizzle light: CW detects but PWS barely registers, or rate < 0.2 mm/h
+        $result['wmo_code'] = 51;
         $result['condition'] = 'drizzle_light';
     } elseif ($precip_rate < DRIZZLE_MAX) {
-        $result['wmo_code'] = 51;  // Drizzle, light
-        $result['condition'] = 'drizzle_light';
+        // Drizzle moderate: 0.2 - 1.0 mm/h
+        $result['wmo_code'] = 53;
+        $result['condition'] = 'drizzle_moderate';
     } elseif ($precip_rate < RAIN_LIGHT_MAX) {
-        $result['wmo_code'] = 61;  // Rain, slight
+        // Rain slight: 1.0 - 2.5 mm/h
+        $result['wmo_code'] = 61;
         $result['condition'] = 'rain_slight';
     } elseif ($precip_rate < RAIN_MODERATE_MAX) {
-        $result['wmo_code'] = 63;  // Rain, moderate
+        // Rain moderate: 2.5 - 7.5 mm/h
+        $result['wmo_code'] = 63;
         $result['condition'] = 'rain_moderate';
     } else {
-        $result['wmo_code'] = 65;  // Rain, heavy
+        // Rain heavy: >= 7.5 mm/h
+        $result['wmo_code'] = 65;
         $result['condition'] = 'rain_heavy';
     }
 

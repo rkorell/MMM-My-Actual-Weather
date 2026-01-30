@@ -10,6 +10,9 @@
 // Modified: 2026-01-28, 18:00 - AP 46: Switched to Weather-Aggregator API polling, removed PWS server and state machine
 // Modified: 2026-01-28, 20:15 - AP 46: Added Wunderground fallback when aggregator data > 180s old
 // Modified: 2026-01-29, 21:10 - Added WMO codes 4, 10, 11, 68, 69 to WmoToWeatherIcon mapping
+// Modified: 2026-01-30, 10:00 - Fixed WMO 55 icon mapping (was freezing, should be normal drizzle)
+// Modified: 2026-01-30, 10:30 - CloudWatcher offline → Wunderground fallback
+// Modified: 2026-01-30, 12:00 - Removed redundant backend polling timer (frontend controls timing)
 
 const NodeHelper = require("node_helper");
 const fetch = require("node-fetch");
@@ -30,7 +33,7 @@ const WmoToWeatherIcon = {
     48: ["wi-freezing-fog", "wi-freezing-fog-night"],    // Depositing rime fog
     51: ["wi-drizzle", "wi-drizzle-night"],              // Light drizzle
     53: ["wi-heavy-drizzle", "wi-heavy-drizzle-night"],  // Moderate drizzle
-    55: ["wi-heavy-freezing-drizzle", "wi-heavy-freezing-drizzle-night"], // Dense drizzle
+    55: ["wi-heavy-drizzle", "wi-heavy-drizzle-night"],  // Dense drizzle (NOT freezing!)
     56: ["wi-freezing-drizzle", "wi-freezing-drizzle-night"], // Light freezing drizzle
     57: ["wi-heavy-freezing-drizzle", "wi-heavy-freezing-drizzle-night"], // Dense freezing drizzle
     61: ["wi-day-rain-mix", "wi-night-rain-mix"],        // Slight rain
@@ -112,34 +115,15 @@ module.exports = NodeHelper.create({
     start: function() {
         console.log("MMM-My-Actual-Weather: Starting node_helper (Aggregator mode)");
         this.configData = null;
-        this.pollingTimer = null;
         this.lastData = null;
     },
 
     socketNotificationReceived: function(notification, payload) {
         if (notification === "FETCH_WEATHER") {
             this.configData = payload;
-
-            // Start polling if not already running
-            if (!this.pollingTimer) {
-                this.startPolling();
-            }
-
-            // Fetch immediately on first request
+            // Frontend controls update timing via scheduleUpdate()
             this.fetchAggregatorData();
         }
-    },
-
-    // Start polling the aggregator API
-    startPolling: function() {
-        const self = this;
-        const interval = this.configData.updateInterval || 60000; // Default: 60 seconds
-
-        console.log(`MMM-My-Actual-Weather: Starting API polling every ${interval/1000}s`);
-
-        this.pollingTimer = setInterval(function() {
-            self.fetchAggregatorData();
-        }, interval);
     },
 
     // Fetch data from weather-aggregator API
@@ -204,6 +188,13 @@ module.exports = NodeHelper.create({
             const fallbackTimeout = config.aggregatorFallbackTimeout || 180;
             if (dataAge > fallbackTimeout) {
                 console.log(`MMM-My-Actual-Weather: Data too old (${dataAge}s > ${fallbackTimeout}s), using Wunderground fallback`);
+                await this.fetchWundergroundFallback();
+                return;
+            }
+
+            // Check if CloudWatcher is offline (no sky_temp = no WMO derivation possible)
+            if (data.cloudwatcher_online === false) {
+                console.log("MMM-My-Actual-Weather: CloudWatcher offline, using Wunderground fallback for weather icon");
                 await this.fetchWundergroundFallback();
                 return;
             }
