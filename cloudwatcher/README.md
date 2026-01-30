@@ -1,6 +1,14 @@
 # CloudWatcher Service
 
+**Stand: 30.01.2026**
+
 Web service for AAG CloudWatcher IR sky temperature sensor.
+
+## Related Documentation
+
+- [MMM-My-Actual-Weather README](../README.md) - Main module documentation
+- [CloudWatcher Project Documentation](cloudwatcher-projekt-dokumentation.md) - Planning and setup (German)
+- [WMO Code Derivation](../weather-aggregator/docs/WMO_Ableitungsmoeglichkeiten.md) - How CloudWatcher data is used
 
 ## Overview
 

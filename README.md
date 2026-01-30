@@ -1,5 +1,7 @@
 # MMM-My-Actual-Weather
 
+**Stand: 30.01.2026**
+
 MagicMirror² module displaying weather data from a Personal Weather Station (PWS) combined with CloudWatcher IR sky sensor data. Uses a weather aggregator backend that derives WMO weather codes locally from sensor data.
 
 ## Features
@@ -16,6 +18,9 @@ MagicMirror² module displaying weather data from a Personal Weather Station (PW
 
 - [Project Documentation](My-Actual-Weather-Projekt-Doku.md) - Internal project documentation (German)
 - [WMO Code Derivation](weather-aggregator/docs/WMO_Ableitungsmoeglichkeiten.md) - Detailed WMO weather code derivation logic (German)
+- [CloudWatcher Integration](cloudwatcher/README.md) - CloudWatcher IR sensor service
+- [CloudWatcher Project Documentation](cloudwatcher/cloudwatcher-projekt-dokumentation.md) - CloudWatcher planning and setup (German)
+- [Audit Log](AUDIT-Log-2026-01-30.md) - Quality audit results and fixes
 
 ## Architecture
 
@@ -234,12 +239,15 @@ The weather aggregator is a separate PHP application that runs on a webserver. S
 
 | File | Description |
 |------|-------------|
-| `pws_receiver.php` | Receives PWS push data, fetches CloudWatcher, stores to DB |
+| `pws_receiver_post.php` | POST-to-GET adapter for Ecowitt protocol (Apache rewrites `/data/report/` to this) |
+| `pws_receiver.php` | Main receiver logic: parses PWS data, fetches CloudWatcher, derives WMO, stores to DB (expects `$_GET` parameters) |
 | `wmo_derivation.php` | WMO code derivation logic |
 | `api.php` | JSON API for MagicMirror |
 | `dashboard.php` | Web dashboard with charts and WMO icon overview |
 | `config.php` | Configuration (thresholds, URLs) |
 | `db_connect.php` | Database credentials (not in Git) |
+
+**Note:** The PWS uses Ecowitt protocol (HTTP POST), but `pws_receiver.php` expects GET parameters. The `pws_receiver_post.php` adapter converts POST body to `$_GET` and includes the main receiver.
 
 ### Deployment
 
@@ -247,7 +255,12 @@ The weather aggregator is a separate PHP application that runs on a webserver. S
 2. Create PostgreSQL database and user
 3. Run `setup/schema.sql` to create tables
 4. Copy `db_connect.example` to `db_connect.php` and enter credentials
-5. Configure your PWS to push to `http://YOUR_SERVER/weather-api/pws_receiver.php`
+5. Copy `config.example.php` to `config.php` and adjust settings (CloudWatcher IP, station height, sensor names)
+6. Configure your PWS to push data using the Ecowitt protocol:
+   - **Server IP/Hostname**: `YOUR_SERVER` (e.g., `172.23.56.196`)
+   - **Path**: `/data/report/`
+   - **Port**: `8000`
+   - **Upload Interval**: `60` seconds
 
 ### Dashboard
 
@@ -267,6 +280,7 @@ The aggregator includes a web dashboard for monitoring and feedback:
 | `api.php?action=current` | GET | Current weather data with WMO code |
 | `api.php?action=history&hours=24` | GET | Historical data (1-168 hours) |
 | `api.php?action=status` | GET | System status (last update, DB stats) |
+| `api.php?action=raw` | GET | Last raw database row (Debug) |
 | `api.php?action=feedback` | POST | Save feedback for current reading |
 | `api.php?action=feedback_stats` | GET | Feedback statistics and recommendations |
 | `api.php?action=wmo_list` | GET | WMO codes sorted by proximity to current |

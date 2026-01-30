@@ -11,6 +11,9 @@
 
 - [README.md](README.md) - Modul-Dokumentation (öffentlich, für GitHub)
 - [WMO_Ableitungsmoeglichkeiten.md](weather-aggregator/docs/WMO_Ableitungsmoeglichkeiten.md) - Detaillierte WMO-Ableitungslogik
+- [CloudWatcher README](cloudwatcher/README.md) - CloudWatcher Service Dokumentation
+- [CloudWatcher Projektdoku](cloudwatcher/cloudwatcher-projekt-dokumentation.md) - CloudWatcher Planung und Setup
+- [Audit Log](AUDIT-Log-2026-01-30.md) - Qualitäts-Audit Ergebnisse
 
 ---
 

@@ -2,19 +2,32 @@
 /**
  * PWS Receiver - Weather Aggregator
  *
- * Receives PWS push data (Wunderground protocol), fetches CloudWatcher data,
+ * Receives PWS push data (Ecowitt protocol via pws_receiver_post.php), fetches CloudWatcher data,
  * derives WMO weather code, and stores everything to PostgreSQL database.
  *
  * Modified: 2026-01-28 - Initial creation (Phase 1)
  * Modified: 2026-01-28 - Added CloudWatcher API + WMO derivation (Phase 2)
  * Modified: 2026-01-28 - Fixed: Removed ID check, corrected rainratein parameter name
  * Modified: 2026-01-29 - Added dewpoint calculation, pressure from baromabsin, humidity1/humidity2
+ * Modified: 2026-01-30 - AP 52: Quality audit (file_exists checks, specific error logging, comments)
  */
 
 // Error reporting for development (disable in production)
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 ini_set('log_errors', 1);
+
+// Check required config files exist
+if (!file_exists(__DIR__ . '/db_connect.php')) {
+    error_log("[weather-aggregator] FATAL: db_connect.php not found. Copy db_connect.example and enter credentials.");
+    http_response_code(500);
+    die("error: db_connect.php missing");
+}
+if (!file_exists(__DIR__ . '/config.php')) {
+    error_log("[weather-aggregator] FATAL: config.php not found. Copy config.example.php and adjust settings.");
+    http_response_code(500);
+    die("error: config.php missing");
+}
 
 require_once __DIR__ . '/db_connect.php';
 require_once __DIR__ . '/config.php';
@@ -127,6 +140,8 @@ function fetchCloudWatcherData() {
         ]
     ]);
 
+    // Note: @ is intentional - suppresses PHP warnings on network timeout.
+    // Error handling is done explicitly below (checking for false, logging).
     $response = @file_get_contents($url, false, $context);
 
     if ($response === false) {
@@ -136,8 +151,13 @@ function fetchCloudWatcherData() {
 
     $data = json_decode($response, true);
 
-    if (!$data || !isset($data['sky_temp_c'])) {
-        logMessage("CloudWatcher API invalid response");
+    if ($data === null) {
+        logMessage("CloudWatcher API JSON parse error");
+        return [];
+    }
+
+    if (!isset($data['sky_temp_c'])) {
+        logMessage("CloudWatcher API missing sky_temp_c in response");
         return [];
     }
 
@@ -251,6 +271,7 @@ try {
     echo "success";
 
 } catch (PDOException $e) {
+    // Note: PWS (Ecowitt) ignores error responses and retries on next push interval (60s)
     logMessage("Database error: " . $e->getMessage());
     http_response_code(500);
     echo "error: database";

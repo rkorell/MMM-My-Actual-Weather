@@ -1,4 +1,5 @@
 // node_helper.js for MMM-My-Actual-Weather
+// AP numbering is cross-module. For this reason gaps can occur!
 // Modified: 2026-01-14, 14:30 - AP 1.1 + 1.2: Added HTTP server for PWS push data, parsing, unit conversion, and fallback logic
 // Modified: 2026-01-14, 16:35 - AP 1.6: Immediate frontend notification on PWS push, debug log for timestamp
 // Modified: 2026-01-15, 14:30 - AP 2: Open-Meteo Caching, PWS-Verbindungsstatus, Logging auf debug
@@ -13,6 +14,7 @@
 // Modified: 2026-01-30, 10:00 - Fixed WMO 55 icon mapping (was freezing, should be normal drizzle)
 // Modified: 2026-01-30, 10:30 - CloudWatcher offline → Wunderground fallback
 // Modified: 2026-01-30, 12:00 - Removed redundant backend polling timer (frontend controls timing)
+// Modified: 2026-01-30, 21:00 - AP 52: Quality audit fixes (WEATHER_ERROR notification, null checks, staleThreshold)
 
 const NodeHelper = require("node_helper");
 const fetch = require("node-fetch");
@@ -150,7 +152,8 @@ module.exports = NodeHelper.create({
 
             // Check data freshness
             const dataAge = data.data_age_s || 0;
-            const isStale = dataAge > 300; // More than 5 minutes old
+            const staleThreshold = config.staleThreshold || 300;
+            const isStale = dataAge > staleThreshold;
 
             if (isStale) {
                 console.log(`MMM-My-Actual-Weather: Data is stale (${dataAge}s old)`);
@@ -223,6 +226,8 @@ module.exports = NodeHelper.create({
             if (this.lastData) {
                 this.lastData.isStale = true;
                 this.sendSocketNotification("WEATHER_DATA", this.lastData);
+            } else {
+                this.sendSocketNotification("WEATHER_ERROR", "No data available");
             }
             return;
         }
@@ -245,6 +250,9 @@ module.exports = NodeHelper.create({
 
             // Get metric or imperial values
             const metric = obs.metric || obs.imperial;
+            if (!metric) {
+                throw new Error("No metric/imperial data in PWS response");
+            }
 
             // Fetch icon from v3 API
             let iconClass = "wi-day-cloudy";
@@ -295,6 +303,8 @@ module.exports = NodeHelper.create({
             if (this.lastData) {
                 this.lastData.isStale = true;
                 this.sendSocketNotification("WEATHER_DATA", this.lastData);
+            } else {
+                this.sendSocketNotification("WEATHER_ERROR", "No data available");
             }
         }
     },

@@ -6,8 +6,7 @@
 // Modified: 2026-01-16, 10:30 - AP 3: Layout vereinfacht (Table statt Flex/Absolute), SVG-Hack durch wi-strong-wind ersetzt
 // Modified: 2026-01-18, 11:00 - AP 4: Added weatherProvider config option (openmeteo/wunderground)
 // Modified: 2026-01-28, 18:00 - AP 46: Switched to Weather-Aggregator API, removed PWS push config
-
-
+// Modified: 2026-01-30, 21:00 - AP 52: Quality audit fixes (defaults to "", removed debug code, staleThreshold param)
 
 Module.register("MMM-My-Actual-Weather", {
     // Helper to convert any CSS color string (named, hex, rgb()) to RGB object
@@ -20,10 +19,6 @@ Module.register("MMM-My-Actual-Weather", {
         document.body.appendChild(tempDiv);
         const computedColor = window.getComputedStyle(tempDiv).color;
         document.body.removeChild(tempDiv);
-
-        // --- ADDED LOGGING FOR DEBUGGING (from previous step) ---
-        Log.debug(`MMM-My-Actual-Weather: Resolving color "${colorString}" -> Computed: "${computedColor}"`);
-        // --- END ADDED LOGGING ---
 
         const match = computedColor.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
         if (match) {
@@ -59,11 +54,12 @@ Module.register("MMM-My-Actual-Weather", {
         longitude: null, // Must be set in config.js for weather icon and day/night calculation
 
         // Weather Aggregator API
-        aggregatorApiUrl: "http://172.23.56.196/weather-api/api.php?action=current",
+        aggregatorApiUrl: "",  // Set in config.js: "http://YOUR_SERVER/weather-api/api.php?action=current"
         aggregatorFallbackTimeout: 180, // Fallback to Wunderground if data older than 180s
+        staleThreshold: 300, // Data older than this (seconds) is marked as stale in UI
 
         // Wunderground API (Fallback)
-        wundergroundIconApiKey: "6532d6454b8aa370768e63d6ba5a832e",
+        wundergroundIconApiKey: "",  // Set in config.js (v3 API key for icon lookup)
         updateInterval: 60 * 1000, // Update interval in milliseconds (60 seconds - matches PWS push)
         animationSpeed: 1000, // Animation speed in milliseconds
         lang: config.language, // Language from MagicMirror configuration
@@ -91,16 +87,11 @@ Module.register("MMM-My-Actual-Weather", {
             // You can add more points here if needed, e.g., { temp: 30, color: "DarkRed" }
         ],
 
-        // Legacy PWS Push Configuration (no longer used - data comes from aggregator)
-        // pwsPushPort: 8000,           // Removed - PWS now pushes to aggregator
-        // pwsPushInterval: 60,         // Removed
-        // pwsPushFallbackTimeout: 180, // Removed
-
         // Additional Sensors
         showSensor1: false,             // Show sensor 1 (temp1)
         showSensor2: false,             // Show sensor 2 (temp2)
-        sensor1Name: "WoZi",            // Display name for sensor 1
-        sensor2Name: "Therapie",        // Display name for sensor 2
+        sensor1Name: "Sensor 1",        // Display name for sensor 1
+        sensor2Name: "Sensor 2",        // Display name for sensor 2
         sensorTextColor: "lightgray",   // Color for sensor text and timestamp
 
         // Data Source Indicator

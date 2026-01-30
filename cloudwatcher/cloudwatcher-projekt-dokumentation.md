@@ -1,9 +1,19 @@
 # CloudWatcher Integration - Projektdokumentation
 
-**Projekt:** AAG CloudWatcher Integration für MagicMirror  
-**Erstellt:** 2026-01-25  
-**Status:** Planungsphase  
+**Projekt:** AAG CloudWatcher Integration für MagicMirror
+**Erstellt:** 2026-01-25
+**Stand:** 30.01.2026
+**Status:** Aktiv
 **Arbeitspaket:** AP 44
+
+---
+
+## Verwandte Dokumentation
+
+- [MMM-My-Actual-Weather README](../README.md) - Haupt-Modul-Dokumentation
+- [CloudWatcher README](README.md) - Service-Dokumentation (technisch)
+- [WMO_Ableitungsmoeglichkeiten.md](../weather-aggregator/docs/WMO_Ableitungsmoeglichkeiten.md) - WMO-Code Ableitung
+- [My-Actual-Weather-Projekt-Doku.md](../My-Actual-Weather-Projekt-Doku.md) - Übergeordnete Projektdoku
 
 ---
 

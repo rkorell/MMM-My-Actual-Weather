@@ -5,6 +5,10 @@
  * Contains URLs, thresholds and constants.
  * NO credentials here - those go in db_connect.php
  *
+ * INSTALLATION:
+ * 1. Copy this file to config.php
+ * 2. Adjust the values marked with "CHANGE THIS" to your setup
+ *
  * Modified: 2026-01-28 - Initial creation
  * Modified: 2026-01-29 - Added thresholds for WMO 04, 10, 11, 48, 57, 67, 68, 77
  * Modified: 2026-01-30 - Drizzle thresholds: DRIZZLE_LIGHT_MAX, DRIZZLE_MAX, FREEZING_DRIZZLE_DENSE
@@ -12,10 +16,10 @@
  */
 
 // Station location
-define('STATION_HEIGHT', 416);  // Meters above sea level (Müllenborn)
+define('STATION_HEIGHT', 416);  // CHANGE THIS: Meters above sea level
 
 // CloudWatcher API
-define('CLOUDWATCHER_API_URL', 'http://172.23.56.60:5000/api/data');
+define('CLOUDWATCHER_API_URL', 'http://YOUR_CLOUDWATCHER_IP:5000/api/data');  // CHANGE THIS
 define('CLOUDWATCHER_TIMEOUT', 5); // seconds
 
 // WMO Code derivation thresholds
@@ -45,7 +49,8 @@ define('MIST_HUMIDITY_MIN', 90);   // humidity > 90%
 define('MIST_HUMIDITY_MAX', 97);   // humidity < 97% (else fog)
 
 // Shallow fog (WMO 11)
-define('SHALLOW_FOG_WIND_MAX', 1.0); // wind < 1 m/s
+define('SHALLOW_FOG_WIND_MAX', 1.0);   // wind < 1 m/s
+define('SHALLOW_FOG_HUMIDITY_MIN', 95); // humidity > 95%
 
 // Haze detection (WMO 04)
 define('HAZE_HUMIDITY_MAX', 60);   // humidity < 60%
@@ -61,8 +66,8 @@ define('FREEZING_RAIN_TEMP', -1.0);// temp > -1 = freezing rain possible (with h
 define('SNOW_GRAINS_TEMP', -2.0);  // temp < -2 = snow grains possible
 
 // Dashboard settings
-define('SENSOR1_NAME', 'Therapie');
-define('SENSOR2_NAME', 'WoZi');
+define('SENSOR1_NAME', 'Sensor 1');  // CHANGE THIS: Your sensor 1 name
+define('SENSOR2_NAME', 'Sensor 2');  // CHANGE THIS: Your sensor 2 name
 
 // Feedback analysis
 define('MIN_FEEDBACK_FOR_RECOMMENDATION', 3);  // Minimum wrong feedbacks to generate recommendation

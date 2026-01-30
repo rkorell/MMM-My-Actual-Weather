@@ -11,6 +11,7 @@
  * Modified: 2026-01-30 - Drizzle thresholds: light < 0.2, moderate 0.2-1.0, rain >= 1.0 mm/h
  * Modified: 2026-01-30 - Snow/Freezing logic restructured: snow priority over freezing at low temps
  *                        WMO 11 (shallow fog) now checked before WMO 45 (fog)
+ * Modified: 2026-01-30 - AP 52: SHALLOW_FOG_HUMIDITY_MIN constant instead of hardcoded 95
  */
 
 require_once __DIR__ . '/config.php';
@@ -309,7 +310,7 @@ function derive_fog_mist_code($temp, $humidity, $dewpoint, $spread, $wind_speed,
     // (spread <= 0 also satisfies spread < 1.0, so fog would match first otherwise)
     if ($dewpoint !== null && $temp <= $dewpoint &&
         $wind_speed !== null && $wind_speed < SHALLOW_FOG_WIND_MAX &&
-        $humidity > 95) {
+        $humidity > SHALLOW_FOG_HUMIDITY_MIN) {
         $result['wmo_code'] = 11;
         $result['condition'] = 'shallow_fog';
         return $result;

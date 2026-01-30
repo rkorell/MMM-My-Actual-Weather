@@ -14,3 +14,6 @@ Thumbs.db
 *.bak
 *.orig
 
+# Weather-aggregator local config (contains IPs/URLs)
+weather-aggregator/config.php
+

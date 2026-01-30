@@ -1,7 +1,7 @@
 # WMO-Code Ableitung aus Sensordaten
 
 **Erstellt:** 2026-01-29
-**Letzte Aktualisierung:** 2026-01-29
+**Stand:** 30.01.2026
 **Zweck:** Dokumentation der Möglichkeiten zur lokalen WMO-Wettercode-Ableitung aus PWS- und CloudWatcher-Sensordaten.
 
 ---
@@ -10,6 +10,8 @@
 
 - [README.md](../../README.md) - Modul-Dokumentation (öffentlich)
 - [My-Actual-Weather-Projekt-Doku.md](../../My-Actual-Weather-Projekt-Doku.md) - Projektdokumentation (intern)
+- [CloudWatcher README](../../cloudwatcher/README.md) - CloudWatcher Service
+- [Audit Log](../../AUDIT-Log-2026-01-30.md) - Qualitäts-Audit
 - [config.php](../config.php) - Aktuelle Schwellenwerte
 - [wmo_derivation.php](../wmo_derivation.php) - Implementierung
 
