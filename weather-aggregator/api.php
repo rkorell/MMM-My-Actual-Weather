@@ -19,6 +19,7 @@
  * Modified: 2026-01-30 - Added cloudwatcher_online flag for fallback detection
  * Modified: 2026-01-30 - Added feedback endpoints (feedback, feedback_stats, wmo_list)
  * Modified: 2026-01-30 - Added apply_recommendations endpoint
+ * Modified: 2026-01-31 - Improved WMO proximity sorting (fog↔drizzle closer)
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -234,18 +235,18 @@ function getWmoListByProximity($currentWmo) {
         }
     }
 
-    // Define group similarity (closer groups first)
+    // Define group similarity (closer groups first, based on meteorological confusion likelihood)
     $groupSimilarity = [
-        'cloud' => ['cloud', 'visibility', 'fog', 'drizzle', 'rain', 'freezing_drizzle', 'freezing_rain', 'sleet', 'snow', 'showers'],
-        'visibility' => ['visibility', 'fog', 'cloud', 'drizzle', 'rain', 'freezing_drizzle', 'freezing_rain', 'sleet', 'snow', 'showers'],
-        'fog' => ['fog', 'visibility', 'cloud', 'drizzle', 'freezing_drizzle', 'rain', 'freezing_rain', 'sleet', 'snow', 'showers'],
-        'drizzle' => ['drizzle', 'rain', 'freezing_drizzle', 'freezing_rain', 'sleet', 'snow', 'showers', 'cloud', 'visibility', 'fog'],
-        'freezing_drizzle' => ['freezing_drizzle', 'drizzle', 'freezing_rain', 'rain', 'sleet', 'snow', 'showers', 'fog', 'cloud', 'visibility'],
-        'rain' => ['rain', 'drizzle', 'freezing_rain', 'freezing_drizzle', 'showers', 'sleet', 'snow', 'cloud', 'visibility', 'fog'],
-        'freezing_rain' => ['freezing_rain', 'rain', 'freezing_drizzle', 'drizzle', 'sleet', 'snow', 'showers', 'fog', 'cloud', 'visibility'],
-        'sleet' => ['sleet', 'snow', 'rain', 'freezing_rain', 'drizzle', 'freezing_drizzle', 'showers', 'cloud', 'visibility', 'fog'],
-        'snow' => ['snow', 'sleet', 'freezing_rain', 'freezing_drizzle', 'rain', 'drizzle', 'showers', 'fog', 'cloud', 'visibility'],
-        'showers' => ['showers', 'rain', 'drizzle', 'sleet', 'snow', 'freezing_rain', 'freezing_drizzle', 'cloud', 'visibility', 'fog'],
+        'cloud'           => ['cloud', 'visibility', 'fog', 'drizzle', 'rain', 'showers', 'freezing_drizzle', 'freezing_rain', 'sleet', 'snow'],
+        'visibility'      => ['visibility', 'fog', 'drizzle', 'cloud', 'freezing_drizzle', 'rain', 'showers', 'freezing_rain', 'sleet', 'snow'],
+        'fog'             => ['fog', 'drizzle', 'visibility', 'freezing_drizzle', 'cloud', 'rain', 'showers', 'freezing_rain', 'sleet', 'snow'],
+        'drizzle'         => ['drizzle', 'rain', 'fog', 'freezing_drizzle', 'showers', 'visibility', 'sleet', 'freezing_rain', 'snow', 'cloud'],
+        'freezing_drizzle'=> ['freezing_drizzle', 'drizzle', 'freezing_rain', 'fog', 'sleet', 'snow', 'rain', 'visibility', 'showers', 'cloud'],
+        'rain'            => ['rain', 'drizzle', 'showers', 'freezing_rain', 'sleet', 'freezing_drizzle', 'snow', 'fog', 'visibility', 'cloud'],
+        'freezing_rain'   => ['freezing_rain', 'rain', 'sleet', 'freezing_drizzle', 'snow', 'drizzle', 'showers', 'fog', 'visibility', 'cloud'],
+        'sleet'           => ['sleet', 'snow', 'rain', 'freezing_rain', 'freezing_drizzle', 'drizzle', 'showers', 'fog', 'visibility', 'cloud'],
+        'snow'            => ['snow', 'sleet', 'showers', 'freezing_rain', 'freezing_drizzle', 'rain', 'drizzle', 'fog', 'visibility', 'cloud'],
+        'showers'         => ['showers', 'rain', 'drizzle', 'snow', 'sleet', 'freezing_rain', 'freezing_drizzle', 'fog', 'visibility', 'cloud'],
     ];
 
     // Build sorted list

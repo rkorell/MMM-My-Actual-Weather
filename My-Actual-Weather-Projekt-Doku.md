@@ -3,7 +3,7 @@
 **Autor:** Dr. Ralf Korell
 **Modul:** MMM-My-Actual-Weather
 **Status:** Aktiv
-**Letzte Aktualisierung:** 2026-01-30 (AP 52)
+**Letzte Aktualisierung:** 2026-01-31 (AP 53)
 
 ---
 
@@ -201,6 +201,8 @@ Day/Night wird von API geliefert (`is_daylight` bzw. `dayOrNight`)
 | `api.php?action=wmo_list` | GET | WMO-Codes sortiert nach Nähe zum aktuellen |
 | `api.php?action=apply_recommendations` | POST | Schwellenwerte in config.php anpassen (mit Backup) |
 
+**WMO-Dropdown-Sortierung:** Die `wmo_list` API sortiert WMO-Codes nach meteorologischer Verwechslungswahrscheinlichkeit (z.B. Nebel↔Niesel näher als Nebel↔Schnee). Labels sind auf Deutsch (definiert in `config.php` → `WMO_CONDITIONS`).
+
 **Feedback-Datenbank-Spalten:**
 | Spalte | Typ | Beschreibung |
 |--------|-----|--------------|
@@ -266,6 +268,7 @@ curl -X POST "http://172.23.56.196:8000/data/report/" \
 | 47 | 2026-01-30 | WMO 55 Icon-Fix, CloudWatcher-Offline-Fallback, Double-Reload-Fix, CSS-Mapping-Korrekturen, Dashboard WMO-Icons-Tab |
 | 50 | 2026-01-30 | Feedback-Mechanismus (OK/Falsch-Buttons, Analyse-Tab, Empfehlungen), Dashboard-Kosmetik (Header, Logo, DB-Größe) |
 | 51 | 2026-01-30 | WMO-Logik-Fixes: Snow/Freezing umstrukturiert (Schnee Vorrang bei < -2°C), WMO 11 vor WMO 45 |
+| 53 | 2026-01-31 | WMO-Labels auf Deutsch, Dropdown-Sortierung verbessert (Nebel↔Niesel näher) |
 
 ---
 
