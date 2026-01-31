@@ -225,6 +225,31 @@ Day/Night wird von API geliefert (`is_daylight` bzw. `dayOrNight`)
 
 ---
 
+## PostgreSQL-Datenbank
+
+PostgreSQL auf dem Webserver. Credentials in `db_connect.php` (nicht im Git).
+
+**Tabelle `weather_readings` (wichtige Spalten):**
+
+| Spalte | Typ | Beschreibung |
+|--------|-----|--------------|
+| `id` | SERIAL | Primary Key |
+| `timestamp` | TIMESTAMPTZ | Zeitstempel der Messung |
+| `temp_c` | NUMERIC | Außentemperatur |
+| `humidity` | NUMERIC | Luftfeuchtigkeit (%) |
+| `precip_rate_mm` | NUMERIC | Niederschlagsrate PWS (mm/h) |
+| `sky_temp_c` | NUMERIC | Himmelstemperatur (CloudWatcher) |
+| `delta_c` | NUMERIC | temp_c - sky_temp_c |
+| `cw_is_raining` | BOOLEAN | CloudWatcher Regensensor |
+| `cw_is_daylight` | BOOLEAN | CloudWatcher Tag/Nacht |
+| `wmo_code` | INTEGER | Abgeleiteter WMO-Code |
+| `condition` | TEXT | WMO-Bezeichnung |
+| `feedback` | BOOLEAN | User-Feedback (true=korrekt, false=falsch) |
+| `feedback_correct_wmo` | INTEGER | Korrigierter WMO-Code |
+| `feedback_comment` | TEXT | Kommentar zum Feedback |
+
+---
+
 ## Debug-Tipps
 
 ```bash
