@@ -3,7 +3,7 @@
 **Autor:** Dr. Ralf Korell
 **Modul:** MMM-My-Actual-Weather
 **Status:** Aktiv
-**Letzte Aktualisierung:** 2026-01-31 (AP 53)
+**Letzte Aktualisierung:** 2026-02-02 (AP 54)
 
 ---
 
@@ -19,14 +19,15 @@
 
 ## Übersicht
 
-- **Datenquelle primär**: Weather-Aggregator auf Webserver (172.23.56.196)
+- **Datenquelle primär**: Weather-Aggregator auf Webserver (172.23.56.196) via MQTT
 - **Datenquelle Fallback**: Wunderground API (wenn Aggregator-Daten > 180s alt)
 - **Aggregator kombiniert**: PWS (IGEROL23) + CloudWatcher (IR-Sensor)
+- **Update-Mechanismus**: MQTT Real-Time (Aggregator publisht nach PWS-Push), Watchdog pollt API bei MQTT-Ausfall
 - **WMO-Code**: Lokal abgeleitet aus Sensordaten (kein Cloud-API nötig)
 - **Zusatzsensoren**: temp1 (Therapie), temp2 (WoZi)
 - **Besonderheiten**: Temperatur-Farbgradient, Tag/Nacht-Icons, Auto-Fallback
 - **Koordinaten**: 50.242 / 6.603 (Müllenborn)
-- **Dependencies**: node-fetch
+- **Dependencies**: mqtt, node-fetch
 
 ---
 
@@ -44,15 +45,17 @@
 │ CloudWatcher│ ◄───────────│    ├── PWS-Daten parsen                │
 │(172.23.56.60)             │    ├── CloudWatcher-API abrufen        │
 └─────────────┘             │    ├── WMO-Code ableiten               │
-                            │    └── In PostgreSQL speichern         │
+                            │    ├── In PostgreSQL speichern         │
+                            │    └── MQTT publish (volle Wetterdaten)│
                             │                                        │
-                            │  api.php → JSON-API                    │
+                            │  api.php → JSON-API (Fallback)         │
                             └────────────────────────────────────────┘
                                           │
-                                          ▼ HTTP GET (polling 60s)
+                                          ▼ MQTT (real-time)
                             ┌────────────────────────────────────────┐
                             │  MagicMirror (node_helper.js)          │
-                            │    ├── Poll aggregatorApiUrl           │
+                            │    ├── MQTT subscribe (instant update) │
+                            │    ├── Watchdog: Poll API bei MQTT-Aus │
                             │    ├── Fallback: Wunderground API      │
                             │    └── Send to Frontend                │
                             └────────────────────────────────────────┘
@@ -81,6 +84,11 @@
 aggregatorApiUrl: "http://172.23.56.196/weather-api/api.php?action=current",
 aggregatorFallbackTimeout: 180,     // Fallback nach 180s
 
+// MQTT Real-Time Updates (Aggregator publisht nach jedem PWS-Push)
+mqttServer: "mqtt://localhost:1883",      // MQTT-Broker (anpassen falls woanders)
+mqttTopic: "weather/aggregator/new_data", // Topic für Wetterdaten
+mqttFallbackTimeout: 5 * 60 * 1000,       // API-Poll wenn kein MQTT für 5 Min
+
 // Wunderground (Fallback)
 stationId: "IGEROL23",
 apiKey: "d1a87...",                  // PWS API v2
@@ -102,7 +110,9 @@ sensor2Name: "WoZi",
 ## Datenfluss
 
 ```
-1. Poll Aggregator-API (alle 60s)
+1. MQTT-Update empfangen (real-time bei PWS-Push)
+       │
+       ├──► Kein MQTT für 5 Minuten? ──► Watchdog pollt Aggregator-API
        │
        ▼
 2. Daten OK?
@@ -117,6 +127,14 @@ sensor2Name: "WoZi",
        ▼
 4. WEATHER_DATA → Frontend
 ```
+
+### Update-Mechanismus
+
+| Methode | Beschreibung |
+|---------|--------------|
+| **MQTT (primär)** | Aggregator publisht nach jedem PWS-Push, MagicMirror erhält Update sofort |
+| **Watchdog** | Wenn kein MQTT für 5 Minuten, pollt node_helper.js die Aggregator-API |
+| **Wunderground** | Wenn Aggregator-Daten > 180s alt oder CloudWatcher offline |
 
 ### Fallback-Auslöser
 
@@ -171,12 +189,12 @@ Day/Night wird von API geliefert (`is_daylight` bzw. `dayOrNight`)
 
 | Datei | Beschreibung |
 |-------|--------------|
-| `pws_receiver.php` | Empfängt PWS-Push, ruft CloudWatcher ab, speichert in DB |
+| `pws_receiver.php` | Empfängt PWS-Push, ruft CloudWatcher ab, speichert in DB, publisht MQTT |
 | `pws_receiver_post.php` | POST-Handler für Port 8000 |
 | `wmo_derivation.php` | WMO-Code Ableitung aus Sensordaten |
-| `api.php` | JSON-API (current, history, raw, status) |
+| `api.php` | JSON-API (current, history, raw, status) - Fallback wenn MQTT nicht verfügbar |
 | `dashboard.php` | Web-Dashboard mit Charts und WMO-Icon-Übersicht |
-| `config.php` | Konfiguration (Schwellenwerte, Sensor-Namen) |
+| `config.php` | Konfiguration (Schwellenwerte, Sensor-Namen, MQTT-Settings) |
 | `db_connect.php` | DB-Credentials (nicht im Git!) |
 
 **Pfad auf Webserver:** `/var/www/weather-api/`
@@ -250,11 +268,70 @@ PostgreSQL auf dem Webserver. Credentials in `db_connect.php` (nicht im Git).
 
 ---
 
+## MQTT-Konfiguration
+
+### Aggregator (config.php auf Webserver)
+
+```php
+// MQTT notification (MagicMirror)
+define('MQTT_BROKER_HOST', '172.23.56.157');  // MagicMirror-Pi (Mosquitto-Broker)
+define('MQTT_BROKER_PORT', 1883);
+define('MQTT_TOPIC', 'weather/aggregator/new_data');
+```
+
+Der Aggregator nutzt `mosquitto_pub` (Paket `mosquitto-clients` muss installiert sein).
+
+### MagicMirror (config.js)
+
+```javascript
+mqttServer: "mqtt://localhost:1883",      // Broker läuft auf MagicMirror-Pi
+mqttTopic: "weather/aggregator/new_data",
+mqttFallbackTimeout: 5 * 60 * 1000,       // 5 Minuten
+```
+
+### MQTT-Payload (vom Aggregator)
+
+```json
+{
+  "timestamp": "2026-02-02T18:30:00+01:00",
+  "temp_c": 2.5,
+  "humidity": 92,
+  "dewpoint_c": 1.3,
+  "pressure_hpa": 1012.5,
+  "wind_speed_ms": 1.8,
+  "wind_dir_deg": 225,
+  "wind_gust_ms": 3.2,
+  "precip_rate_mm": 0,
+  "precip_today_mm": 1.2,
+  "uv_index": 0,
+  "solar_radiation": 0,
+  "temp1_c": 21.5,
+  "temp2_c": 19.8,
+  "humidity1": 50,
+  "humidity2": 36,
+  "sky_temp_c": -8.5,
+  "delta_c": 11.0,
+  "rain_freq": 3200,
+  "mpsas": 18.5,
+  "wmo_code": 3,
+  "condition": "overcast",
+  "is_raining": false,
+  "is_daylight": false,
+  "cloudwatcher_online": true,
+  "data_age_s": 0
+}
+```
+
+---
+
 ## Debug-Tipps
 
 ```bash
 # MagicMirror Logs
 pm2 logs MagicMirror --lines 50 | grep "MMM-My-Actual-Weather"
+
+# MQTT-Traffic beobachten
+mosquitto_sub -h localhost -t "weather/aggregator/new_data" -v
 
 # Aggregator API testen
 curl -s "http://172.23.56.196/weather-api/api.php?action=current" | jq
@@ -268,6 +345,9 @@ curl -s "http://172.23.56.60:5000/api/data" | jq
 # PWS-Push simulieren
 curl -X POST "http://172.23.56.196:8000/data/report/" \
   -d "PASSKEY=test&tempf=50&humidity=80&winddir=180&windspeedmph=5&rainratein=0&dailyrainin=0"
+
+# MQTT manuell testen (vom Webserver)
+ssh pi@172.23.56.196 "mosquitto_pub -h 172.23.56.157 -t 'weather/aggregator/new_data' -m '{\"test\":true}'"
 ```
 
 ---
@@ -294,6 +374,7 @@ curl -X POST "http://172.23.56.196:8000/data/report/" \
 | 50 | 2026-01-30 | Feedback-Mechanismus (OK/Falsch-Buttons, Analyse-Tab, Empfehlungen), Dashboard-Kosmetik (Header, Logo, DB-Größe) |
 | 51 | 2026-01-30 | WMO-Logik-Fixes: Snow/Freezing umstrukturiert (Schnee Vorrang bei < -2°C), WMO 11 vor WMO 45 |
 | 53 | 2026-01-31 | WMO-Labels auf Deutsch, Dropdown-Sortierung verbessert (Nebel↔Niesel näher) |
+| 54 | 2026-02-02 | MQTT Real-Time Updates: Aggregator publisht zu MQTT, Watchdog-Fallback auf API-Polling |
 
 ---
 
@@ -301,9 +382,9 @@ curl -X POST "http://172.23.56.196:8000/data/report/" \
 
 | Datei | Beschreibung |
 |-------|--------------|
-| `MMM-My-Actual-Weather.js` | Frontend (DOM, Config-Defaults, Farbgradient) |
-| `node_helper.js` | Backend (Aggregator-Polling, Wunderground-Fallback, Icon-Mapping) |
-| `package.json` | Dependencies (node-fetch) |
+| `MMM-My-Actual-Weather.js` | Frontend (DOM, Config-Defaults, Farbgradient, Watchdog) |
+| `node_helper.js` | Backend (MQTT-Client, Aggregator-API-Fallback, Wunderground-Fallback, Icon-Mapping) |
+| `package.json` | Dependencies (mqtt, node-fetch) |
 | `README.md` | Dokumentation (öffentlich, für GitHub) |
 | `MMM-My-Actual-Weather.css` | Styling |
 | `weather-aggregator/` | Aggregator PHP-Code (deployed auf Webserver) |

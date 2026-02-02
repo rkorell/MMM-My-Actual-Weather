@@ -1,12 +1,13 @@
 # MMM-My-Actual-Weather
 
-**Stand: 30.01.2026**
+**Stand: 02.02.2026**
 
-MagicMirror² module displaying weather data from a Personal Weather Station (PWS) combined with CloudWatcher IR sky sensor data. Uses a weather aggregator backend that derives WMO weather codes locally from sensor data.
+MagicMirror² module displaying weather data from a Personal Weather Station (PWS) combined with CloudWatcher IR sky sensor data. Uses a weather aggregator backend that derives WMO weather codes locally from sensor data and pushes updates via MQTT.
 
 ## Features
 
-- **Weather Aggregator Integration**: Polls weather data from a central aggregator API
+- **MQTT Real-Time Updates**: Instant weather updates via MQTT when PWS pushes new data
+- **Weather Aggregator Integration**: Receives weather data from central aggregator via MQTT (with API polling fallback)
 - **CloudWatcher IR Sensor**: Sky temperature measurement for accurate cloud detection
 - **Local WMO Code Derivation**: Weather conditions determined from actual sensor data (no external weather API needed)
 - **Wunderground Fallback**: Automatic fallback when aggregator data is stale
@@ -25,7 +26,7 @@ MagicMirror² module displaying weather data from a Personal Weather Station (PW
 ## Architecture
 
 ```
-┌─────────────┐  HTTP POST (every 60s)
+┌─────────────┐  HTTP POST (every ~60-90s)
 │  PWS        │ ─────────────────────────┐
 │ (IGEROL23)  │                          │
 └─────────────┘                          ▼
@@ -36,15 +37,17 @@ MagicMirror² module displaying weather data from a Personal Weather Station (PW
 │ CloudWatcher│ ◄───────────│    ├── Parse PWS data                  │
 │  (IR Sensor)│             │    ├── Fetch CloudWatcher API          │
 └─────────────┘             │    ├── Derive WMO code                 │
-                            │    └── Store in PostgreSQL             │
+                            │    ├── Store in PostgreSQL             │
+                            │    └── Publish to MQTT                 │
                             │                                        │
-                            │  api.php → JSON API                    │
+                            │  api.php → JSON API (fallback)         │
                             └────────────────────────────────────────┘
                                           │
-                                          ▼ HTTP GET (polling every 60s)
+                                          ▼ MQTT (real-time)
                             ┌────────────────────────────────────────┐
                             │  MagicMirror                           │
-                            │    ├── Poll aggregator API             │
+                            │    ├── Subscribe to MQTT topic         │
+                            │    ├── Watchdog: Poll API if no MQTT   │
                             │    ├── Fallback: Wunderground API      │
                             │    └── Display weather data            │
                             └────────────────────────────────────────┘
@@ -76,6 +79,11 @@ Add the following to your `config/config.js`:
         aggregatorApiUrl: "http://YOUR_SERVER/weather-api/api.php?action=current",
         aggregatorFallbackTimeout: 180,  // Fallback after 180s stale data
 
+        // MQTT real-time updates (aggregator publishes here after each PWS push)
+        mqttServer: "mqtt://localhost:1883",  // Adjust if MQTT broker runs elsewhere
+        mqttTopic: "weather/aggregator/new_data",
+        mqttFallbackTimeout: 5 * 60 * 1000,  // Poll API if no MQTT for 5 minutes
+
         // Wunderground (fallback)
         stationId: "YOUR_STATION_ID",
         apiKey: "YOUR_PWS_API_KEY",
@@ -105,7 +113,16 @@ Add the following to your `config/config.js`:
 |--------|------|---------|-------------|
 | `aggregatorApiUrl` | String | - | URL to weather aggregator API (required) |
 | `aggregatorFallbackTimeout` | Number | `180` | Seconds before switching to Wunderground fallback |
-| `updateInterval` | Number | `60000` | Polling interval in ms (60 seconds) |
+
+### MQTT Settings
+
+The module receives real-time weather updates via MQTT. When a new PWS reading arrives at the aggregator, it publishes the full weather data to MQTT, and the module updates instantly.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `mqttServer` | String | `"mqtt://localhost:1883"` | MQTT broker URL (adjust if broker runs elsewhere) |
+| `mqttTopic` | String | `"weather/aggregator/new_data"` | Topic where aggregator publishes weather data |
+| `mqttFallbackTimeout` | Number | `300000` | Poll API if no MQTT update within this time (ms, default 5 min) |
 
 ### Wunderground Fallback
 
@@ -240,11 +257,11 @@ The weather aggregator is a separate PHP application that runs on a webserver. S
 | File | Description |
 |------|-------------|
 | `pws_receiver_post.php` | POST-to-GET adapter for Ecowitt protocol (Apache rewrites `/data/report/` to this) |
-| `pws_receiver.php` | Main receiver logic: parses PWS data, fetches CloudWatcher, derives WMO, stores to DB (expects `$_GET` parameters) |
+| `pws_receiver.php` | Main receiver logic: parses PWS data, fetches CloudWatcher, derives WMO, stores to DB, publishes to MQTT |
 | `wmo_derivation.php` | WMO code derivation logic |
-| `api.php` | JSON API for MagicMirror |
+| `api.php` | JSON API for MagicMirror (fallback when MQTT unavailable) |
 | `dashboard.php` | Web dashboard with charts and WMO icon overview |
-| `config.php` | Configuration (thresholds, URLs) |
+| `config.php` | Configuration (thresholds, URLs, MQTT settings) |
 | `db_connect.php` | Database credentials (not in Git) |
 
 **Note:** The PWS uses Ecowitt protocol (HTTP POST), but `pws_receiver.php` expects GET parameters. The `pws_receiver_post.php` adapter converts POST body to `$_GET` and includes the main receiver.
@@ -289,7 +306,7 @@ The aggregator includes a web dashboard for monitoring and feedback:
 ## Data Flow
 
 ```
-PWS Push (every 60s)
+PWS Push (every ~60-90s)
       │
       ▼
 Aggregator (pws_receiver.php)
@@ -297,14 +314,13 @@ Aggregator (pws_receiver.php)
       ├── Fetch CloudWatcher API
       ├── Calculate: dewpoint, pressure (QNH)
       ├── Derive WMO code from sensors
-      └── Store to PostgreSQL
+      ├── Store to PostgreSQL
+      └── Publish full data to MQTT
               │
-              ▼
-Aggregator API (api.php?action=current)
-              │
-              ▼
+              ▼ MQTT (instant)
 MagicMirror (node_helper.js)
-      ├── Poll aggregator API (every 60s)
+      ├── Receive MQTT message with weather data
+      ├── Watchdog: Poll API if no MQTT for 5 min
       ├── If data_age > 180s → Wunderground fallback
       ├── Map WMO code → weather icon
       └── Send to frontend
@@ -314,13 +330,20 @@ Frontend (MMM-My-Actual-Weather.js)
       └── Render weather display
 ```
 
+### Update Flow
+
+1. **Primary (MQTT)**: PWS pushes → Aggregator stores + publishes to MQTT → MagicMirror receives instantly
+2. **Watchdog Fallback**: If no MQTT message received for 5 minutes, poll aggregator API
+3. **Wunderground Fallback**: If aggregator data is older than 180s, switch to Wunderground API
+
 ## Icon Mapping
 
 Weather icons are mapped from WMO codes using the `WmoToWeatherIcon` lookup table. Icons are from the Weather Icons font with day/night variants based on `is_daylight` from CloudWatcher.
 
 ## Dependencies
 
-- `node-fetch` - HTTP requests for API polling
+- `mqtt` - MQTT client for real-time weather updates
+- `node-fetch` - HTTP requests for API polling (fallback)
 
 ## Debugging
 
@@ -348,6 +371,7 @@ curl -s "http://CLOUDWATCHER_IP:5000/api/data" | jq
 
 | Date | Description |
 |------|-------------|
+| 2026-02-02 | MQTT real-time updates: aggregator publishes to MQTT, watchdog fallback to API polling |
 | 2026-01-30 | Snow/Freezing logic restructured: snow priority at temp < -2°C, WMO 11 before WMO 45 |
 | 2026-01-30 | Feedback mechanism (OK/Wrong buttons, analysis tab, recommendations), dashboard cosmetics |
 | 2026-01-30 | CloudWatcher offline fallback, WMO icon mapping fixes, Dashboard WMO Icons tab |
