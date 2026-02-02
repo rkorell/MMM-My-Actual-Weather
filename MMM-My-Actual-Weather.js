@@ -7,6 +7,7 @@
 // Modified: 2026-01-18, 11:00 - AP 4: Added weatherProvider config option (openmeteo/wunderground)
 // Modified: 2026-01-28, 18:00 - AP 46: Switched to Weather-Aggregator API, removed PWS push config
 // Modified: 2026-01-30, 21:00 - AP 52: Quality audit fixes (defaults to "", removed debug code, staleThreshold param)
+// Modified: 2026-02-02, 20:45 - Added MQTT support with watchdog fallback to API polling
 
 Module.register("MMM-My-Actual-Weather", {
     // Helper to convert any CSS color string (named, hex, rgb()) to RGB object
@@ -60,7 +61,12 @@ Module.register("MMM-My-Actual-Weather", {
 
         // Wunderground API (Fallback)
         wundergroundIconApiKey: "",  // Set in config.js (v3 API key for icon lookup)
-        updateInterval: 60 * 1000, // Update interval in milliseconds (60 seconds - matches PWS push)
+
+        // MQTT real-time updates from weather aggregator
+        mqttServer: "mqtt://localhost:1883",  // MQTT broker, adjust in config.js if broker runs elsewhere
+        mqttTopic: "weather/aggregator/new_data",  // Topic where aggregator publishes weather data
+        mqttFallbackTimeout: 5 * 60 * 1000,  // Poll API if no MQTT update received within this time (ms)
+
         animationSpeed: 1000, // Animation speed in milliseconds
         lang: config.language, // Language from MagicMirror configuration
         decimalPlacesTemp: 1, // Number of decimal places for temperature
@@ -103,8 +109,9 @@ Module.register("MMM-My-Actual-Weather", {
         this.weatherData = null; // Stores the fetched weather data
         this.loaded = false; // Flag if data has been loaded
         this.resolvedGradientPoints = null; // Cached gradient colors (resolved to RGB)
-        this.getWeatherData(); // Starts the first data fetch
-        this.scheduleUpdate(); // Schedules recurring updates
+        this.lastUpdate = 0; // Timestamp of last received data (for MQTT watchdog)
+        this.getWeatherData(); // Starts the first data fetch (initial load from API)
+        this.startWatchdog(); // Starts watchdog timer for MQTT fallback
         Log.info("Starting module: " + this.name);
     },
 
@@ -337,12 +344,17 @@ Module.register("MMM-My-Actual-Weather", {
         return wrapper;
     },
 
-    // Schedules the next update
-    scheduleUpdate: function() {
+    // Watchdog timer: polls API if no MQTT update received within mqttFallbackTimeout
+    // This ensures data availability even if MQTT connection fails
+    startWatchdog: function() {
         var self = this;
         setInterval(function() {
-            self.getWeatherData();
-        }, this.config.updateInterval);
+            var timeSinceUpdate = Date.now() - self.lastUpdate;
+            if (timeSinceUpdate > self.config.mqttFallbackTimeout) {
+                Log.info("MMM-My-Actual-Weather: No MQTT update for " + Math.round(timeSinceUpdate / 1000) + "s, polling API");
+                self.getWeatherData();
+            }
+        }, 60 * 1000); // Check every 60 seconds
     },
 
     // Requests weather data from the node_helper
@@ -363,6 +375,7 @@ Module.register("MMM-My-Actual-Weather", {
         if (notification === "WEATHER_DATA") {
             this.weatherData = payload;
             this.loaded = true;
+            this.lastUpdate = Date.now(); // Track last successful update for watchdog
             this.updateDom(this.config.animationSpeed);
         } else if (notification === "WEATHER_ERROR") {
             Log.error(this.name + ": " + payload);

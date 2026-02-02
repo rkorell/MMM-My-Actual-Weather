@@ -10,6 +10,8 @@
  * Modified: 2026-01-28 - Fixed: Removed ID check, corrected rainratein parameter name
  * Modified: 2026-01-29 - Added dewpoint calculation, pressure from baromabsin, humidity1/humidity2
  * Modified: 2026-01-30 - AP 52: Quality audit (file_exists checks, specific error logging, comments)
+ * Modified: 2026-02-02 - Added MQTT notification to MagicMirror after successful data storage
+ * Modified: 2026-02-02 - Removed routine logging (PWS push, CloudWatcher data, Data stored) to reduce log volume
  */
 
 // Error reporting for development (disable in production)
@@ -161,8 +163,6 @@ function fetchCloudWatcherData() {
         return [];
     }
 
-    logMessage("CloudWatcher data: sky_temp={$data['sky_temp_c']}°C, rain_freq={$data['rain_freq']}");
-
     return [
         'sky_temp_c' => $data['sky_temp_c'],
         'rain_freq' => $data['rain_freq'] ?? null,
@@ -174,10 +174,6 @@ function fetchCloudWatcherData() {
 
 // Main execution
 try {
-    // Log PWS push (no ID check - just process incoming data)
-    $stationType = getParam('stationtype', 'unknown');
-    logMessage("PWS push received (type: $stationType)");
-
     // Parse and convert PWS data
     $temp_c = fahrenheitToCelsius(getParam('tempf'));
     $humidity = floatval(getParam('humidity'));
@@ -265,7 +261,46 @@ try {
         ':condition' => $condition,
     ]);
 
-    logMessage("Data stored: temp={$pws['temp_c']}°C, delta={$delta}°C, wmo={$wmo_code} ({$condition})");
+    // MQTT notify MagicMirror with full weather data
+    $mqttPayload = json_encode([
+        'timestamp' => date('c'),
+        'temp_c' => $pws['temp_c'],
+        'humidity' => $pws['humidity'],
+        'dewpoint_c' => $pws['dewpoint_c'],
+        'pressure_hpa' => $pws['pressure_hpa'],
+        'wind_speed_ms' => $pws['wind_speed_ms'],
+        'wind_dir_deg' => $pws['wind_dir_deg'],
+        'wind_gust_ms' => $pws['wind_gust_ms'],
+        'precip_rate_mm' => $pws['precip_rate_mm'],
+        'precip_today_mm' => $pws['precip_today_mm'],
+        'uv_index' => $pws['uv_index'],
+        'solar_radiation' => $pws['solar_radiation'],
+        'temp1_c' => $pws['temp1_c'],
+        'temp2_c' => $pws['temp2_c'],
+        'humidity1' => $pws['humidity1'],
+        'humidity2' => $pws['humidity2'],
+        'sky_temp_c' => $cw['sky_temp_c'],
+        'delta_c' => $delta,
+        'rain_freq' => $cw['rain_freq'],
+        'mpsas' => $cw['mpsas'],
+        'wmo_code' => $wmo_code,
+        'condition' => $condition,
+        'is_raining' => $cw['is_raining'],
+        'is_daylight' => $cw['is_daylight'],
+        'cloudwatcher_online' => ($cw['sky_temp_c'] !== null),
+        'data_age_s' => 0
+    ]);
+    $mqttCmd = sprintf(
+        "mosquitto_pub -h %s -p %d -t '%s' -m '%s' 2>&1",
+        MQTT_BROKER_HOST,
+        MQTT_BROKER_PORT,
+        MQTT_TOPIC,
+        $mqttPayload
+    );
+    $mqttResult = shell_exec($mqttCmd);
+    if ($mqttResult) {
+        logMessage("MQTT publish error: " . trim($mqttResult));
+    }
 
     // Success response (expected by PWS)
     echo "success";

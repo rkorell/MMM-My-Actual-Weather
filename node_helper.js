@@ -15,9 +15,11 @@
 // Modified: 2026-01-30, 10:30 - CloudWatcher offline → Wunderground fallback
 // Modified: 2026-01-30, 12:00 - Removed redundant backend polling timer (frontend controls timing)
 // Modified: 2026-01-30, 21:00 - AP 52: Quality audit fixes (WEATHER_ERROR notification, null checks, staleThreshold)
+// Modified: 2026-02-02, 20:45 - Added MQTT support for real-time updates from weather aggregator
 
 const NodeHelper = require("node_helper");
 const fetch = require("node-fetch");
+const mqtt = require("mqtt");
 
 // ==================== WMO CODE → WEATHER ICON MAPPING ====================
 // Open-Meteo WMO Weather Codes → weather-icons class mapping
@@ -115,16 +117,105 @@ const WUndergroundToWi = {
 
 module.exports = NodeHelper.create({
     start: function() {
-        console.log("MMM-My-Actual-Weather: Starting node_helper (Aggregator mode)");
+        console.log("MMM-My-Actual-Weather: Starting node_helper (Aggregator + MQTT mode)");
         this.configData = null;
         this.lastData = null;
+        this.mqttClient = null;
+        this.mqttConnected = false;
     },
 
     socketNotificationReceived: function(notification, payload) {
         if (notification === "FETCH_WEATHER") {
             this.configData = payload;
-            // Frontend controls update timing via scheduleUpdate()
+
+            // Connect to MQTT broker for real-time updates (if configured and not yet connected)
+            if (payload.mqttServer && !this.mqttConnected) {
+                this.startMqtt();
+            }
+
+            // Initial fetch from API (provides immediate data from DB on startup)
             this.fetchAggregatorData();
+        }
+    },
+
+    // Connect to MQTT broker and subscribe to weather updates
+    startMqtt: function() {
+        const config = this.configData;
+        console.log(`MMM-My-Actual-Weather: Connecting to MQTT broker ${config.mqttServer}`);
+
+        this.mqttClient = mqtt.connect(config.mqttServer);
+
+        this.mqttClient.on("connect", () => {
+            console.log(`MMM-My-Actual-Weather: MQTT connected, subscribing to ${config.mqttTopic}`);
+            this.mqttConnected = true;
+            this.mqttClient.subscribe(config.mqttTopic, (err) => {
+                if (err) {
+                    console.error("MMM-My-Actual-Weather: MQTT subscribe error:", err.message);
+                }
+            });
+        });
+
+        this.mqttClient.on("message", (topic, message) => {
+            this.handleMqttMessage(message);
+        });
+
+        this.mqttClient.on("error", (err) => {
+            console.error("MMM-My-Actual-Weather: MQTT error:", err.message);
+        });
+
+        this.mqttClient.on("close", () => {
+            console.log("MMM-My-Actual-Weather: MQTT connection closed");
+            this.mqttConnected = false;
+        });
+    },
+
+    // Process incoming MQTT message with full weather data
+    handleMqttMessage: function(message) {
+        try {
+            const data = JSON.parse(message.toString());
+            const config = this.configData;
+
+            // Routine MQTT updates not logged to reduce log volume
+
+            // Check if CloudWatcher is offline - fall back to API polling
+            if (data.cloudwatcher_online === false) {
+                console.log("MMM-My-Actual-Weather: CloudWatcher offline in MQTT data, triggering API fallback");
+                this.fetchWundergroundFallback();
+                return;
+            }
+
+            const isDay = data.is_daylight !== false;
+            const iconClass = this.getWeatherIcon(data.wmo_code, isDay);
+
+            // Build weather data object for frontend
+            const weatherData = {
+                temp: data.temp_c,
+                windSpeed: data.wind_speed_ms,
+                precipTotal: data.precip_today_mm,
+                windDirection: this.getWindDirection(data.wind_dir_deg, config.lang),
+                temp1: data.temp1_c,
+                temp2: data.temp2_c,
+                humidity1: data.humidity1,
+                humidity2: data.humidity2,
+                timestamp: data.timestamp ? this.formatTimestamp(data.timestamp) : null,
+                isLocalData: true,
+                waitingForPws: false,
+                weatherCode: data.wmo_code,
+                isDay: isDay,
+                weatherIconClass: iconClass,
+                condition: data.condition,
+                skyTemp: data.sky_temp_c,
+                delta: data.delta_c,
+                dataAge: 0,
+                isStale: false,
+                source: "mqtt"
+            };
+
+            this.lastData = weatherData;
+            this.sendSocketNotification("WEATHER_DATA", weatherData);
+
+        } catch (e) {
+            console.error("MMM-My-Actual-Weather: MQTT message parse error:", e.message);
         }
     },
 
@@ -203,8 +294,6 @@ module.exports = NodeHelper.create({
             }
 
             this.lastData = weatherData;
-
-            console.log(`MMM-My-Actual-Weather: Data received - temp=${data.temp_c}°C, wmo=${wmoCode} (${data.condition}), icon=${iconClass}`);
 
             // Send to frontend
             this.sendSocketNotification("WEATHER_DATA", weatherData);
