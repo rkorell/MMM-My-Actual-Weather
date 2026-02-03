@@ -17,3 +17,6 @@ Thumbs.db
 # Weather-aggregator local config (contains IPs/URLs)
 weather-aggregator/config.php
 
+# Local test scripts (not for deployment)
+test/
+

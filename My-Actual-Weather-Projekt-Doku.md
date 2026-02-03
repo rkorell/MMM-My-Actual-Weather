@@ -3,7 +3,7 @@
 **Autor:** Dr. Ralf Korell
 **Modul:** MMM-My-Actual-Weather
 **Status:** Aktiv
-**Letzte Aktualisierung:** 2026-02-03 (AP 55)
+**Letzte Aktualisierung:** 2026-02-03 (AP 56)
 
 ---
 
@@ -21,8 +21,9 @@
 
 - **Datenquelle primär**: Weather-Aggregator auf Webserver (WEBSERVER_IP) via MQTT
 - **Datenquelle Fallback**: Wunderground API (wenn Aggregator-Daten > 180s alt)
-- **Aggregator kombiniert**: PWS (YOUR_STATION_ID) + CloudWatcher (IR-Sensor)
-- **Update-Mechanismus**: MQTT Real-Time (Aggregator publisht nach PWS-Push), Watchdog pollt API bei MQTT-Ausfall
+- **Aggregator kombiniert**: PWS (YOUR_STATION_ID) via GW1100 Gateway + CloudWatcher (IR-Sensor)
+- **Update-Mechanismus**: MQTT Real-Time (Aggregator publisht nach Gateway-Push), Watchdog pollt API bei MQTT-Ausfall
+- **Gateway**: Ecowitt GW1100 - stabiles Push-Intervall (PWS-Hardware hat unzuverlässiges Timing)
 - **WMO-Code**: Lokal abgeleitet aus Sensordaten (kein Cloud-API nötig)
 - **Zusatzsensoren**: temp1 (Therapie), temp2 (WoZi)
 - **Besonderheiten**: Temperatur-Farbgradient, Tag/Nacht-Icons, Auto-Fallback
@@ -34,15 +35,16 @@
 ## Architektur
 
 ```
-┌─────────────┐  POST :8000/data/report/
-│  PWS        │ ────────────────────────────┐
-│ (YOUR_STATION_ID)  │                             │
-└─────────────┘                             ▼
+┌─────────────┐              ┌─────────────┐  POST :8000/data/report/
+│  PWS        │───Sensoren──►│  GW1100     │─────────────────────────┐
+│ (YOUR_STATION_ID)  │              │  Gateway    │                         │
+└─────────────┘              └─────────────┘                         │
+                              stabiles Intervall                     ▼
                             ┌────────────────────────────────────────┐
                             │  Webserver (WEBSERVER_IP)             │
                             │                                        │
 ┌─────────────┐  HTTP GET   │  pws_receiver.php                      │
-│ CloudWatcher│ ◄───────────│    ├── PWS-Daten parsen                │
+│ CloudWatcher│ ◄───────────│    ├── Gateway-Daten parsen            │
 │(CLOUDWATCHER_IP)             │    ├── CloudWatcher-API abrufen        │
 └─────────────┘             │    ├── WMO-Code ableiten               │
                             │    ├── In PostgreSQL speichern         │
@@ -393,6 +395,7 @@ ssh pi@WEBSERVER_IP "mosquitto_pub -h MQTT_BROKER_IP -t 'weather/aggregator/new_
 | 53 | 2026-01-31 | WMO-Labels auf Deutsch, Dropdown-Sortierung verbessert (Nebel↔Niesel näher) |
 | 54 | 2026-02-02 | MQTT Real-Time Updates: Aggregator publisht zu MQTT, Watchdog-Fallback auf API-Polling |
 | 55 | 2026-02-03 | Heater-PWM Regenerkennung: CloudWatcher heater_pwm als zusätzlicher Niederschlagsindikator (WET_THRESHOLD 2100) |
+| 56 | 2026-02-03 | GW1100 Gateway: PWS-Push durch Ecowitt Gateway ersetzt (stabiles Intervall, Protokoll 100% kompatibel) |
 
 ---
 
