@@ -12,6 +12,7 @@
  * Modified: 2026-01-30 - AP 52: Quality audit (file_exists checks, specific error logging, comments)
  * Modified: 2026-02-02 - Added MQTT notification to MagicMirror after successful data storage
  * Modified: 2026-02-02 - Removed routine logging (PWS push, CloudWatcher data, Data stored) to reduce log volume
+ * Modified: 2026-02-03 - Added heater_pwm from CloudWatcher for rain detection
  */
 
 // Error reporting for development (disable in production)
@@ -168,6 +169,8 @@ function fetchCloudWatcherData() {
         'rain_freq' => $data['rain_freq'] ?? null,
         'mpsas' => $data['mpsas'] ?? null,
         'is_raining' => $data['is_raining'] ?? false,
+        'is_wet' => $data['is_wet'] ?? false,
+        'heater_pwm' => $data['heater_pwm'] ?? null,
         'is_daylight' => $data['is_daylight'] ?? null,
     ];
 }
@@ -205,6 +208,8 @@ try {
             'rain_freq' => null,
             'mpsas' => null,
             'is_raining' => null,
+            'is_wet' => null,
+            'heater_pwm' => null,
             'is_daylight' => null,
         ];
     }
@@ -222,7 +227,7 @@ try {
         precip_rate_mm, precip_today_mm,
         uv_index, solar_radiation, temp1_c, temp2_c,
         humidity1, humidity2,
-        sky_temp_c, rain_freq, mpsas, cw_is_raining, cw_is_daylight,
+        sky_temp_c, rain_freq, mpsas, cw_is_raining, cw_is_daylight, heater_pwm,
         delta_c, wmo_code, condition
     ) VALUES (
         :temp_c, :humidity, :dewpoint_c, :pressure_hpa,
@@ -230,7 +235,7 @@ try {
         :precip_rate_mm, :precip_today_mm,
         :uv_index, :solar_radiation, :temp1_c, :temp2_c,
         :humidity1, :humidity2,
-        :sky_temp_c, :rain_freq, :mpsas, :cw_is_raining, :cw_is_daylight,
+        :sky_temp_c, :rain_freq, :mpsas, :cw_is_raining, :cw_is_daylight, :heater_pwm,
         :delta_c, :wmo_code, :condition
     )";
 
@@ -256,6 +261,7 @@ try {
         ':mpsas' => $cw['mpsas'],
         ':cw_is_raining' => toBool($cw['is_raining'] ?? null),
         ':cw_is_daylight' => toBool($cw['is_daylight'] ?? null),
+        ':heater_pwm' => $cw['heater_pwm'],
         ':delta_c' => $delta,
         ':wmo_code' => $wmo_code,
         ':condition' => $condition,
@@ -283,6 +289,8 @@ try {
         'delta_c' => $delta,
         'rain_freq' => $cw['rain_freq'],
         'mpsas' => $cw['mpsas'],
+        'heater_pwm' => $cw['heater_pwm'],
+        'is_wet' => $cw['is_wet'],
         'wmo_code' => $wmo_code,
         'condition' => $condition,
         'is_raining' => $cw['is_raining'],

@@ -1,7 +1,7 @@
 # WMO-Code Ableitung aus Sensordaten
 
 **Erstellt:** 2026-01-29
-**Stand:** 30.01.2026
+**Stand:** 03.02.2026
 **Zweck:** Dokumentation der Möglichkeiten zur lokalen WMO-Wettercode-Ableitung aus PWS- und CloudWatcher-Sensordaten.
 
 ---
@@ -9,6 +9,8 @@
 ## Verwandte Dokumentation
 
 - [README.md](../../README.md) - Modul-Dokumentation (öffentlich)
+- [Weather Aggregator README](../README.md) - Aggregator-Übersicht
+- [Heater-PWM-Analyse](Heater-PWM-Analyse.md) - Tiefenanalyse des CloudWatcher-Regensensor-Verhaltens
 - [My-Actual-Weather-Projekt-Doku.md](../../My-Actual-Weather-Projekt-Doku.md) - Projektdokumentation (intern)
 - [CloudWatcher README](../../cloudwatcher/README.md) - CloudWatcher Service
 - [Audit Log](../../AUDIT-Log-2026-01-30.md) - Qualitäts-Audit
@@ -48,10 +50,34 @@ Das Ziel ist, WMO 4677 Present Weather Codes **lokal** aus eigenen Sensordaten a
 | Feld | Parameter | Einheit | Verwendung |
 |------|-----------|---------|------------|
 | `sky_temp_c` | Himmelstemperatur | °C | Bewölkung (Delta) |
-| `rain_freq` | Regensensor-Frequenz | Hz | — |
+| `rain_freq` | Regensensor-Frequenz | Hz | Regenerkennung (600=nass, 2100=trocken) |
+| `heater_pwm` | Heizungs-PWM | % (0-100) | Feuchtigkeitserkennung (>0 = Feuchtigkeit) |
 | `mpsas` | Himmelshelligkeit | mag/arcsec² | — |
-| `is_raining` | Niederschlag erkannt | bool | Früherkennung! |
+| `is_raining` | Niederschlag erkannt | bool | Früherkennung (rain_freq < 1700) |
+| `is_wet` | Oberfläche feucht | bool | rain_freq < 2100 |
 | `is_daylight` | Tageslicht | bool | Icon-Auswahl |
+
+#### Heater-Trick zur Regenerkennung
+
+Der CloudWatcher-Regensensor hat eine **beheizte Oberfläche**. Die Heizung aktiviert sich automatisch, wenn Feuchtigkeit erkannt wird:
+
+| `heater_pwm` | Bedeutung |
+|--------------|-----------|
+| 0% | Sensor trocken |
+| 1-30% | Leichte Feuchtigkeit (Tau, Nebel) |
+| >30% | Aktive Feuchtigkeit (Regen, Schnee) |
+| 100% | Maximale Heizleistung (starker Niederschlag) |
+
+**Nutzen für WMO-Ableitung:** Wenn `heater_pwm > 30%` UND `is_wet = true`, wird dies als Niederschlag gewertet - auch wenn die PWS-Wippe 0 mm/h zeigt. Dies erkennt:
+- Leichten Nieselregen (zu fein für PWS-Wippe)
+- Schnee (verstopft/verzögert PWS-Wippe)
+- Nebelniederschlag
+
+```php
+// Niederschlagserkennung mit Heater-Trick
+$heater_indicates_moisture = ($heater_pwm > 30) && $cw_is_wet;
+$is_precipitating = ($precip_rate > 0) || $cw_is_raining || $heater_indicates_moisture;
+```
 
 ### Berechnete Werte
 
@@ -432,13 +458,15 @@ Die WMO-Ableitung in `wmo_derivation.php` ist ein **prioritätsbasierter Entsche
 derive_wmo_code($pws, $cw)
 │
 │   Eingabe: temp, humidity, dewpoint, precip_rate, wind_speed (PWS)
-│            sky_temp, is_raining (CloudWatcher)
+│            sky_temp, is_raining, is_wet, heater_pwm (CloudWatcher)
 │   Berechnet: delta = temp - sky_temp
 │              spread = temp - dewpoint
 │
 ├─► 1. NIEDERSCHLAG? (höchste Priorität)
 │   │
-│   │   $is_precipitating = ($precip_rate > 0) || $cw_is_raining
+│   │   // Heater-Trick: PWM > 30% + is_wet = Niederschlag
+│   │   $heater_indicates_moisture = ($heater_pwm > 30) && $cw_is_wet;
+│   │   $is_precipitating = ($precip_rate > 0) || $cw_is_raining || $heater_indicates_moisture;
 │   │
 │   └─► JA → derive_precipitation_code()
 │            │
@@ -691,3 +719,4 @@ if ($is_drizzle || $precip_rate < 0.2) {
 | 2026-01-30 | CloudWatcher-Fallback: `cloudwatcher_online` API-Feld, Wunderground-Fallback bei Ausfall |
 | 2026-01-30 | **Snow/Freezing-Logik umstrukturiert**: Schnee hat Vorrang bei temp < -2°C; neue Temperaturzonen; SNOW_TEMP_MAX 1.0→1.5°C |
 | 2026-01-30 | **WMO 11 vor WMO 45**: Shallow Fog wird jetzt vor Fog geprüft (spezifischerer Fall hat Vorrang) |
+| 2026-02-03 | **Heater-Trick**: CloudWatcher `heater_pwm` als zusätzlicher Niederschlagsindikator; WET_THRESHOLD auf 2100 angepasst |

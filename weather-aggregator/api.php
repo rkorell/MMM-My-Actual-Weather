@@ -20,6 +20,7 @@
  * Modified: 2026-01-30 - Added feedback endpoints (feedback, feedback_stats, wmo_list)
  * Modified: 2026-01-30 - Added apply_recommendations endpoint
  * Modified: 2026-01-31 - Improved WMO proximity sorting (fog↔drizzle closer)
+ * Modified: 2026-02-03 - Added heater_pwm and is_wet to current endpoint for rain detection
  */
 
 header('Content-Type: application/json; charset=utf-8');
@@ -90,9 +91,11 @@ function getCurrentWeather($pdo) {
         'delta_c' => $row['delta_c'] !== null ? floatval($row['delta_c']) : null,
         'rain_freq' => $row['rain_freq'] !== null ? intval($row['rain_freq']) : null,
         'mpsas' => $row['mpsas'] !== null ? floatval($row['mpsas']) : null,
+        'heater_pwm' => $row['heater_pwm'] !== null ? intval($row['heater_pwm']) : null,
         'wmo_code' => $row['wmo_code'] !== null ? intval($row['wmo_code']) : null,
         'condition' => $row['condition'],
         'is_raining' => $row['cw_is_raining'] === 't' || $row['cw_is_raining'] === true,
+        'is_wet' => $row['rain_freq'] !== null && intval($row['rain_freq']) < 2100,  // Derived from rain_freq
         'is_daylight' => $row['cw_is_daylight'] === 't' || $row['cw_is_daylight'] === true,
         'cloudwatcher_online' => $row['sky_temp_c'] !== null,  // CW offline if no sky_temp
         'data_age_s' => $age_seconds,
@@ -107,7 +110,7 @@ function getHistoryWeather($pdo, $hours = 24) {
 
     $sql = "SELECT timestamp, temp_c, humidity, pressure_hpa,
                    wind_speed_ms, precip_rate_mm, sky_temp_c,
-                   delta_c, wmo_code, condition
+                   delta_c, rain_freq, heater_pwm, wmo_code, condition
             FROM weather_readings
             WHERE timestamp > NOW() - INTERVAL '{$hours} hours'
             ORDER BY timestamp ASC";
@@ -126,6 +129,8 @@ function getHistoryWeather($pdo, $hours = 24) {
             'precip_rate_mm' => $row['precip_rate_mm'] !== null ? floatval($row['precip_rate_mm']) : null,
             'sky_temp_c' => $row['sky_temp_c'] !== null ? floatval($row['sky_temp_c']) : null,
             'delta_c' => $row['delta_c'] !== null ? floatval($row['delta_c']) : null,
+            'rain_freq' => $row['rain_freq'] !== null ? intval($row['rain_freq']) : null,
+            'heater_pwm' => $row['heater_pwm'] !== null ? intval($row['heater_pwm']) : null,
             'wmo_code' => $row['wmo_code'] !== null ? intval($row['wmo_code']) : null,
             'condition' => $row['condition'],
         ];

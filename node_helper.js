@@ -16,6 +16,7 @@
 // Modified: 2026-01-30, 12:00 - Removed redundant backend polling timer (frontend controls timing)
 // Modified: 2026-01-30, 21:00 - AP 52: Quality audit fixes (WEATHER_ERROR notification, null checks, staleThreshold)
 // Modified: 2026-02-02, 20:45 - Added MQTT support for real-time updates from weather aggregator
+// Modified: 2026-02-03, 15:30 - Added heaterPwm and isWet fields for rain sensor heater status
 
 const NodeHelper = require("node_helper");
 const fetch = require("node-fetch");
@@ -206,6 +207,8 @@ module.exports = NodeHelper.create({
                 condition: data.condition,
                 skyTemp: data.sky_temp_c,
                 delta: data.delta_c,
+                heaterPwm: data.heater_pwm,
+                isWet: data.is_wet,
                 dataAge: 0,
                 isStale: false,
                 source: "mqtt"
@@ -263,8 +266,8 @@ module.exports = NodeHelper.create({
                 windDirection: this.getWindDirection(data.wind_dir_deg, config.lang),
                 temp1: data.temp1_c,
                 temp2: data.temp2_c,
-                humidity1: null, // Not in aggregator yet
-                humidity2: null,
+                humidity1: data.humidity1,
+                humidity2: data.humidity2,
                 timestamp: data.timestamp ? this.formatTimestamp(data.timestamp) : null,
                 isLocalData: true,
                 waitingForPws: false,
@@ -274,6 +277,8 @@ module.exports = NodeHelper.create({
                 condition: data.condition,
                 skyTemp: data.sky_temp_c,
                 delta: data.delta_c,
+                heaterPwm: data.heater_pwm,
+                isWet: data.is_wet,
                 dataAge: dataAge,
                 isStale: isStale
             };
@@ -375,6 +380,8 @@ module.exports = NodeHelper.create({
                 condition: "wunderground_fallback",
                 skyTemp: null,
                 delta: null,
+                heaterPwm: null,
+                isWet: null,
                 dataAge: null,
                 isStale: true
             };

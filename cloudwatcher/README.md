@@ -1,6 +1,6 @@
 # CloudWatcher Service
 
-**Stand: 30.01.2026**
+**Stand: 03.02.2026**
 
 Web service for AAG CloudWatcher IR sky temperature sensor.
 
@@ -76,13 +76,26 @@ Returns JSON for MagicMirror:
   "delta_c": 20.75,
   "cloud_condition": "mostly_clear",
   "rain_freq": 2340,
+  "heater_pwm": 0,
+  "is_wet": false,
+  "is_raining": false,
   "ldr_kohm": 125.3,
   "is_daylight": false,
-  "is_raining": false,
   "uptime_s": 3600,
   "quality": "ok"
 }
 ```
+
+### Rain Sensor Fields
+
+| Field | Description |
+|-------|-------------|
+| `rain_freq` | Capacitive sensor frequency: ~2100 (dry), <1700 (raining) |
+| `heater_pwm` | Heater duty cycle 0-100% (>0 means moisture detected) |
+| `is_wet` | True when rain_freq < 2100 (sensor surface is wet) |
+| `is_raining` | True when rain_freq < 1700 (active precipitation) |
+
+The heater activates automatically when moisture is detected on the sensor surface. A heater_pwm > 30% combined with is_wet=true indicates precipitation, even if the rain gauge shows 0 mm/h.
 
 ### Cloud Conditions
 

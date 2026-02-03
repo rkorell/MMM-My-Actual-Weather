@@ -2,6 +2,7 @@
 CloudWatcher Web Service
 Modified: 2026-01-25 15:30 - Initial creation
 Modified: 2026-01-28 19:00 - Updated for new sensor config (no ambient temp)
+Modified: 2026-02-03 14:00 - Added heater_pwm to API response
 
 Flask web server providing:
 - HTML dashboard at /
@@ -179,6 +180,7 @@ def api_data():
         'rain_freq': data.get('rain_freq'),
         'is_raining': data.get('is_raining'),
         'is_wet': data.get('is_wet'),
+        'heater_pwm': data.get('heater_pwm'),
         'light_sensor_raw': data.get('light_sensor_raw'),
         'mpsas': data.get('mpsas'),
         'is_daylight': data.get('is_daylight'),

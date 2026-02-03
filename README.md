@@ -1,6 +1,6 @@
 # MMM-My-Actual-Weather
 
-**Stand: 02.02.2026**
+**Stand: 03.02.2026**
 
 MagicMirror² module displaying weather data from a Personal Weather Station (PWS) combined with CloudWatcher IR sky sensor data. Uses a weather aggregator backend that derives WMO weather codes locally from sensor data and pushes updates via MQTT.
 
@@ -10,6 +10,7 @@ MagicMirror² module displaying weather data from a Personal Weather Station (PW
 - **Weather Aggregator Integration**: Receives weather data from central aggregator via MQTT (with API polling fallback)
 - **CloudWatcher IR Sensor**: Sky temperature measurement for accurate cloud detection
 - **Local WMO Code Derivation**: Weather conditions determined from actual sensor data (no external weather API needed)
+- **Rain Sensor Heater Detection**: Uses CloudWatcher heater PWM as additional precipitation indicator (detects light rain/snow missed by PWS rain gauge)
 - **Wunderground Fallback**: Automatic fallback when aggregator data is stale
 - **Additional Sensors**: Support for up to 2 indoor temperature/humidity sensors
 - **Temperature Color Gradient**: Temperature-dependent color display (configurable)
@@ -18,7 +19,9 @@ MagicMirror² module displaying weather data from a Personal Weather Station (PW
 ## Documentation
 
 - [Project Documentation](My-Actual-Weather-Projekt-Doku.md) - Internal project documentation (German)
+- [Weather Aggregator](weather-aggregator/README.md) - Backend system documentation (PHP, PostgreSQL, MQTT)
 - [WMO Code Derivation](weather-aggregator/docs/WMO_Ableitungsmoeglichkeiten.md) - Detailed WMO weather code derivation logic (German)
+- [Heater-PWM Analysis](weather-aggregator/docs/Heater-PWM-Analyse.md) - Deep analysis of CloudWatcher rain sensor behavior (German)
 - [CloudWatcher Integration](cloudwatcher/README.md) - CloudWatcher IR sensor service
 - [CloudWatcher Project Documentation](cloudwatcher/cloudwatcher-projekt-dokumentation.md) - CloudWatcher planning and setup (German)
 - [Audit Log](AUDIT-Log-2026-01-30.md) - Quality audit results and fixes
@@ -229,6 +232,9 @@ The module expects the following JSON structure from the aggregator API:
     "humidity2": 36,
     "sky_temp_c": -8.5,
     "delta_c": 9.5,
+    "rain_freq": 2048,
+    "heater_pwm": 0,
+    "is_wet": false,
     "wmo_code": 3,
     "condition": "overcast",
     "is_raining": false,
@@ -237,6 +243,17 @@ The module expects the following JSON structure from the aggregator API:
     "data_age_s": 15
 }
 ```
+
+### Rain Sensor Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `rain_freq` | Integer | CloudWatcher rain sensor frequency (600=wet, 2100=dry) |
+| `heater_pwm` | Integer | Heater PWM duty cycle 0-100% (>0 = moisture detected) |
+| `is_wet` | Boolean | True when rain_freq < 2100 (sensor surface is wet) |
+| `is_raining` | Boolean | True when rain_freq < 1700 (active precipitation) |
+
+The `heater_pwm` value is particularly useful for detecting light precipitation: when PWM > 30% and `is_wet` is true, the WMO derivation treats this as active precipitation even if the PWS rain gauge shows 0 mm/h.
 
 ### Fallback Logic
 
@@ -371,6 +388,7 @@ curl -s "http://CLOUDWATCHER_IP:5000/api/data" | jq
 
 | Date | Description |
 |------|-------------|
+| 2026-02-03 | Rain sensor heater detection: heater_pwm as additional precipitation indicator |
 | 2026-02-02 | MQTT real-time updates: aggregator publishes to MQTT, watchdog fallback to API polling |
 | 2026-01-30 | Snow/Freezing logic restructured: snow priority at temp < -2°C, WMO 11 before WMO 45 |
 | 2026-01-30 | Feedback mechanism (OK/Wrong buttons, analysis tab, recommendations), dashboard cosmetics |

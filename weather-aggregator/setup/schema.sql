@@ -1,6 +1,7 @@
 -- Weather Aggregator Database Schema
 -- Modified: 2026-01-28 - Initial creation
 -- Modified: 2026-01-29 - Added humidity1, humidity2 for indoor sensors
+-- Modified: 2026-02-03 - Added heater_pwm for CloudWatcher rain sensor heater status
 --
 -- Run as postgres superuser:
 --   CREATE USER weather_user WITH PASSWORD 'xxx';
@@ -35,13 +36,19 @@ CREATE TABLE IF NOT EXISTS weather_readings (
     sky_temp_c REAL,
     rain_freq INTEGER,
     mpsas REAL,
+    heater_pwm INTEGER,     -- Rain sensor heater PWM 0-100% (>0 = moisture detected)
     cw_is_raining BOOLEAN,
     cw_is_daylight BOOLEAN,
 
     -- Derived Values
     delta_c REAL,           -- temp_c - sky_temp_c
     wmo_code INTEGER,
-    condition VARCHAR(30)
+    condition VARCHAR(30),
+
+    -- User Feedback (for WMO code calibration)
+    feedback BOOLEAN,               -- true = correct, false = incorrect
+    feedback_correct_wmo INTEGER,   -- User-corrected WMO code
+    feedback_comment TEXT           -- Optional comment
 );
 
 -- Index for time-based queries (most recent first)

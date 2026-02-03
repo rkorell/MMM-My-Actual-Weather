@@ -1,6 +1,7 @@
 # CloudWatcher Configuration
 # Modified: 2026-01-25 15:30 - Initial creation
 # Modified: 2026-01-28 19:00 - Updated for Rain Sensor Type C, added MPSAS thresholds
+# Modified: 2026-02-03 14:00 - Adjusted WET_THRESHOLD from 2000 to 2100 (RTS2 calibration)
 
 # Serial port settings
 SERIAL_PORT = "/dev/ttyUSB0"
@@ -28,8 +29,8 @@ THRESHOLDS = {
 # Rain sensor thresholds (Type C - no calibration required)
 # Higher frequency = drier sensor
 RAIN_THRESHOLD = 1700   # Below this = raining
-WET_THRESHOLD = 2000    # Below this = wet/damp (but not necessarily raining)
-# Note: Dry = freq > 2000, Wet = 1700-2000, Rain = freq < 1700
+WET_THRESHOLD = 2100    # Below this = wet/damp (but not necessarily raining)
+# Note: Dry = freq > 2100, Wet = 1700-2100, Rain = freq < 1700
 
 # MPSAS (Sky Quality) thresholds
 # Higher MPSAS = darker sky

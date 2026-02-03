@@ -3,7 +3,7 @@
 **Autor:** Dr. Ralf Korell
 **Modul:** MMM-My-Actual-Weather
 **Status:** Aktiv
-**Letzte Aktualisierung:** 2026-02-02 (AP 54)
+**Letzte Aktualisierung:** 2026-02-03 (AP 55)
 
 ---
 
@@ -237,7 +237,20 @@ Day/Night wird von API geliefert (`is_daylight` bzw. `dayOrNight`)
 - **Dashboard:** http://172.23.56.60:5000/
 - **API:** http://172.23.56.60:5000/api/data
 
-**Liefert:** sky_temp_c, rain_freq, mpsas, is_raining, is_daylight
+**Liefert:** sky_temp_c, rain_freq, mpsas, heater_pwm, is_raining, is_wet, is_daylight
+
+### Regensensor-Erkennung
+
+Der CloudWatcher hat einen kapazitiven Regensensor mit Heizung. Die Heizung wird aktiv, wenn Feuchtigkeit erkannt wird.
+
+| Feld | Beschreibung |
+|------|--------------|
+| `rain_freq` | Sensorfrequenz: ~2100 (trocken), <1700 (Regen), 600-1700 (feucht) |
+| `heater_pwm` | Heizungs-PWM 0-100% (>0 = Feuchtigkeit erkannt, Heizung aktiv) |
+| `is_wet` | `true` wenn `rain_freq < 2100` (Sensoroberfläche feucht) |
+| `is_raining` | `true` wenn `rain_freq < 1700` (aktiver Niederschlag) |
+
+**Heater-Trick:** Wenn `heater_pwm > 30%` und `is_wet = true`, wertet die WMO-Ableitung dies als Niederschlag - auch wenn die PWS-Regenrate 0 mm/h zeigt. Dies erkennt leichten Regen/Schnee, der die PWS-Wippe nicht auslöst.
 
 **Dokumentation:** [cloudwatcher/cloudwatcher-projekt-dokumentation.md](cloudwatcher/cloudwatcher-projekt-dokumentation.md)
 
@@ -258,7 +271,9 @@ PostgreSQL auf dem Webserver. Credentials in `db_connect.php` (nicht im Git).
 | `precip_rate_mm` | NUMERIC | Niederschlagsrate PWS (mm/h) |
 | `sky_temp_c` | NUMERIC | Himmelstemperatur (CloudWatcher) |
 | `delta_c` | NUMERIC | temp_c - sky_temp_c |
-| `cw_is_raining` | BOOLEAN | CloudWatcher Regensensor |
+| `rain_freq` | INTEGER | CloudWatcher Regensensor-Frequenz |
+| `heater_pwm` | INTEGER | CloudWatcher Regensensor-Heizung PWM 0-100% |
+| `cw_is_raining` | BOOLEAN | CloudWatcher Regensensor (rain_freq < 1700) |
 | `cw_is_daylight` | BOOLEAN | CloudWatcher Tag/Nacht |
 | `wmo_code` | INTEGER | Abgeleiteter WMO-Code |
 | `condition` | TEXT | WMO-Bezeichnung |
@@ -311,8 +326,10 @@ mqttFallbackTimeout: 5 * 60 * 1000,       // 5 Minuten
   "humidity2": 36,
   "sky_temp_c": -8.5,
   "delta_c": 11.0,
-  "rain_freq": 3200,
+  "rain_freq": 2048,
   "mpsas": 18.5,
+  "heater_pwm": 0,
+  "is_wet": false,
   "wmo_code": 3,
   "condition": "overcast",
   "is_raining": false,
@@ -375,6 +392,7 @@ ssh pi@172.23.56.196 "mosquitto_pub -h 172.23.56.157 -t 'weather/aggregator/new_
 | 51 | 2026-01-30 | WMO-Logik-Fixes: Snow/Freezing umstrukturiert (Schnee Vorrang bei < -2°C), WMO 11 vor WMO 45 |
 | 53 | 2026-01-31 | WMO-Labels auf Deutsch, Dropdown-Sortierung verbessert (Nebel↔Niesel näher) |
 | 54 | 2026-02-02 | MQTT Real-Time Updates: Aggregator publisht zu MQTT, Watchdog-Fallback auf API-Polling |
+| 55 | 2026-02-03 | Heater-PWM Regenerkennung: CloudWatcher heater_pwm als zusätzlicher Niederschlagsindikator (WET_THRESHOLD 2100) |
 
 ---
 

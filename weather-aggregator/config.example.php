@@ -13,6 +13,8 @@
  * Modified: 2026-01-29 - Added thresholds for WMO 04, 10, 11, 48, 57, 67, 68, 77
  * Modified: 2026-01-30 - Drizzle thresholds: DRIZZLE_LIGHT_MAX, DRIZZLE_MAX, FREEZING_DRIZZLE_DENSE
  * Modified: 2026-01-30 - Snow/Freezing logic restructured: SNOW_CERTAIN_TEMP, adjusted SNOW_TEMP_MAX/SLEET_TEMP_MIN
+ * Modified: 2026-02-02 - Added MQTT settings for MagicMirror notification
+ * Modified: 2026-02-03 - Added HEATER_PWM_MOISTURE_THRESHOLD for rain sensor heater detection
  */
 
 // Station location
@@ -21,6 +23,17 @@ define('STATION_HEIGHT', 416);  // CHANGE THIS: Meters above sea level
 // CloudWatcher API
 define('CLOUDWATCHER_API_URL', 'http://YOUR_CLOUDWATCHER_IP:5000/api/data');  // CHANGE THIS
 define('CLOUDWATCHER_TIMEOUT', 5); // seconds
+
+// CloudWatcher rain sensor heater detection
+// When heater PWM exceeds this threshold AND is_wet is true, treat as precipitation
+// This helps detect light rain/snow that the PWS rain gauge misses
+define('HEATER_PWM_MOISTURE_THRESHOLD', 30);  // PWM > 30% indicates active precipitation
+
+// MQTT notification (MagicMirror)
+// After storing data, publishes full weather JSON to MQTT for real-time updates
+define('MQTT_BROKER_HOST', 'YOUR_MQTT_BROKER_IP');  // CHANGE THIS: e.g., '172.23.56.157'
+define('MQTT_BROKER_PORT', 1883);
+define('MQTT_TOPIC', 'weather/aggregator/new_data');
 
 // WMO Code derivation thresholds
 
