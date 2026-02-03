@@ -859,7 +859,7 @@ Dieser Abschnitt dokumentiert, was tatsächlich auf dem CloudWatcher-Pi implemen
 | Eigenschaft | Wert |
 |-------------|------|
 | **Hostname** | CloudWatcher |
-| **IP-Adresse** | 172.23.56.60 |
+| **IP-Adresse** | CLOUDWATCHER_IP |
 | **Hardware** | Raspberry Pi 4, 4GB RAM |
 | **OS** | Debian 12 (Bookworm) |
 | **Python** | 3.11.2 |
@@ -871,7 +871,7 @@ SSH-Key-Authentifizierung von MagicMirrorPi5 eingerichtet (2026-01-25):
 
 ```bash
 # Verbindung vom MagicMirrorPi5
-ssh pi@172.23.56.60
+ssh pi@CLOUDWATCHER_IP
 ```
 
 SSH-Key liegt in `/home/pi/.ssh/id_rsa` auf MagicMirrorPi5.
@@ -945,19 +945,19 @@ Die Source-of-Truth liegt im Git-Repo auf MagicMirrorPi5. Deployment auf den Clo
 # Vom MagicMirrorPi5 ausführen
 rsync -avz --exclude '__pycache__' \
   /home/pi/MagicMirror/modules/MMM-My-Actual-Weather/cloudwatcher/ \
-  pi@172.23.56.60:/home/pi/cloudwatcher/
+  pi@CLOUDWATCHER_IP:/home/pi/cloudwatcher/
 ```
 
 #### Service-File aktualisieren (bei Änderungen)
 
 ```bash
-ssh pi@172.23.56.60 "sudo cp /home/pi/cloudwatcher/cloudwatcher.service /etc/systemd/system/ && sudo systemctl daemon-reload"
+ssh pi@CLOUDWATCHER_IP "sudo cp /home/pi/cloudwatcher/cloudwatcher.service /etc/systemd/system/ && sudo systemctl daemon-reload"
 ```
 
 #### Service neustarten
 
 ```bash
-ssh pi@172.23.56.60 "sudo systemctl restart cloudwatcher"
+ssh pi@CLOUDWATCHER_IP "sudo systemctl restart cloudwatcher"
 ```
 
 #### Komplett-Deployment (alles in einem)
@@ -965,8 +965,8 @@ ssh pi@172.23.56.60 "sudo systemctl restart cloudwatcher"
 ```bash
 rsync -avz --exclude '__pycache__' \
   /home/pi/MagicMirror/modules/MMM-My-Actual-Weather/cloudwatcher/ \
-  pi@172.23.56.60:/home/pi/cloudwatcher/ && \
-ssh pi@172.23.56.60 "sudo cp /home/pi/cloudwatcher/cloudwatcher.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart cloudwatcher"
+  pi@CLOUDWATCHER_IP:/home/pi/cloudwatcher/ && \
+ssh pi@CLOUDWATCHER_IP "sudo cp /home/pi/cloudwatcher/cloudwatcher.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart cloudwatcher"
 ```
 
 ### 14.6 Systemd Service
@@ -1017,22 +1017,22 @@ sudo systemctl restart cloudwatcher
 
 ```bash
 # Service-Status prüfen
-ssh pi@172.23.56.60 "sudo systemctl status cloudwatcher"
+ssh pi@CLOUDWATCHER_IP "sudo systemctl status cloudwatcher"
 
 # Logs ansehen (live)
-ssh pi@172.23.56.60 "sudo journalctl -u cloudwatcher -f"
+ssh pi@CLOUDWATCHER_IP "sudo journalctl -u cloudwatcher -f"
 
 # Service neustarten
-ssh pi@172.23.56.60 "sudo systemctl restart cloudwatcher"
+ssh pi@CLOUDWATCHER_IP "sudo systemctl restart cloudwatcher"
 
 # Service stoppen
-ssh pi@172.23.56.60 "sudo systemctl stop cloudwatcher"
+ssh pi@CLOUDWATCHER_IP "sudo systemctl stop cloudwatcher"
 
 # API testen
-curl http://172.23.56.60:5000/api/data
+curl http://CLOUDWATCHER_IP:5000/api/data
 
 # Dashboard im Browser
-# http://172.23.56.60:5000/
+# http://CLOUDWATCHER_IP:5000/
 ```
 
 ### 14.8 API-Response (Beispiel)

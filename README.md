@@ -31,7 +31,7 @@ MagicMirror² module displaying weather data from a Personal Weather Station (PW
 ```
 ┌─────────────┐  HTTP POST (every ~60-90s)
 │  PWS        │ ─────────────────────────┐
-│ (IGEROL23)  │                          │
+│ (YOUR_PWS)  │                          │
 └─────────────┘                          ▼
                             ┌────────────────────────────────────────┐
                             │  Weather Aggregator (Webserver)        │

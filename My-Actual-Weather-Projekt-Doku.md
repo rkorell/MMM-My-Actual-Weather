@@ -19,14 +19,14 @@
 
 ## Übersicht
 
-- **Datenquelle primär**: Weather-Aggregator auf Webserver (172.23.56.196) via MQTT
+- **Datenquelle primär**: Weather-Aggregator auf Webserver (WEBSERVER_IP) via MQTT
 - **Datenquelle Fallback**: Wunderground API (wenn Aggregator-Daten > 180s alt)
-- **Aggregator kombiniert**: PWS (IGEROL23) + CloudWatcher (IR-Sensor)
+- **Aggregator kombiniert**: PWS (YOUR_STATION_ID) + CloudWatcher (IR-Sensor)
 - **Update-Mechanismus**: MQTT Real-Time (Aggregator publisht nach PWS-Push), Watchdog pollt API bei MQTT-Ausfall
 - **WMO-Code**: Lokal abgeleitet aus Sensordaten (kein Cloud-API nötig)
 - **Zusatzsensoren**: temp1 (Therapie), temp2 (WoZi)
 - **Besonderheiten**: Temperatur-Farbgradient, Tag/Nacht-Icons, Auto-Fallback
-- **Koordinaten**: 50.242 / 6.603 (Müllenborn)
+- **Koordinaten**: YOUR_LAT / YOUR_LON
 - **Dependencies**: mqtt, node-fetch
 
 ---
@@ -36,14 +36,14 @@
 ```
 ┌─────────────┐  POST :8000/data/report/
 │  PWS        │ ────────────────────────────┐
-│ (IGEROL23)  │                             │
+│ (YOUR_STATION_ID)  │                             │
 └─────────────┘                             ▼
                             ┌────────────────────────────────────────┐
-                            │  Webserver (172.23.56.196)             │
+                            │  Webserver (WEBSERVER_IP)             │
                             │                                        │
 ┌─────────────┐  HTTP GET   │  pws_receiver.php                      │
 │ CloudWatcher│ ◄───────────│    ├── PWS-Daten parsen                │
-│(172.23.56.60)             │    ├── CloudWatcher-API abrufen        │
+│(CLOUDWATCHER_IP)             │    ├── CloudWatcher-API abrufen        │
 └─────────────┘             │    ├── WMO-Code ableiten               │
                             │    ├── In PostgreSQL speichern         │
                             │    └── MQTT publish (volle Wetterdaten)│
@@ -67,13 +67,13 @@
 
 | API | Zweck | URL / Key |
 |-----|-------|-----------|
-| Aggregator API | Primäre Datenquelle | `http://172.23.56.196/weather-api/api.php?action=current` |
-| Aggregator Dashboard | Web-Ansicht | `http://172.23.56.196/weather-api/dashboard.php` |
-| PWS API v2 | Fallback Wetterdaten | `apiKey` (d1a87...) |
-| WUnderground v3 | Fallback Icons | `wundergroundIconApiKey` (6532d...) |
-| CloudWatcher | IR-Sensor Daten | `http://172.23.56.60:5000/api/data` |
+| Aggregator API | Primäre Datenquelle | `http://WEBSERVER_IP/weather-api/api.php?action=current` |
+| Aggregator Dashboard | Web-Ansicht | `http://WEBSERVER_IP/weather-api/dashboard.php` |
+| PWS API v2 | Fallback Wetterdaten | `apiKey` (YOUR_API_KEY) |
+| WUnderground v3 | Fallback Icons | `wundergroundIconApiKey` (YOUR_ICON_API_KEY) |
+| CloudWatcher | IR-Sensor Daten | `http://CLOUDWATCHER_IP:5000/api/data` |
 
-**MyFritz (extern):** `https://3iw49xthj5blmf7n.myfritz.net/weather-api/...`
+**MyFritz (extern):** `https://YOUR_DOMAIN/weather-api/...`
 
 ---
 
@@ -81,7 +81,7 @@
 
 ```javascript
 // Aggregator (primär)
-aggregatorApiUrl: "http://172.23.56.196/weather-api/api.php?action=current",
+aggregatorApiUrl: "http://WEBSERVER_IP/weather-api/api.php?action=current",
 aggregatorFallbackTimeout: 180,     // Fallback nach 180s
 
 // MQTT Real-Time Updates (Aggregator publisht nach jedem PWS-Push)
@@ -90,9 +90,9 @@ mqttTopic: "weather/aggregator/new_data", // Topic für Wetterdaten
 mqttFallbackTimeout: 5 * 60 * 1000,       // API-Poll wenn kein MQTT für 5 Min
 
 // Wunderground (Fallback)
-stationId: "IGEROL23",
-apiKey: "d1a87...",                  // PWS API v2
-wundergroundIconApiKey: "6532d...", // v3 API für Icons
+stationId: "YOUR_STATION_ID",
+apiKey: "YOUR_API_KEY",                  // PWS API v2
+wundergroundIconApiKey: "YOUR_ICON_API_KEY", // v3 API für Icons
 
 // Koordinaten (für Fallback-Icons)
 latitude: 50.242,
@@ -203,10 +203,10 @@ Day/Night wird von API geliefert (`is_daylight` bzw. `dayOrNight`)
 **Dashboard URLs:**
 | URL | Beschreibung |
 |-----|--------------|
-| `http://172.23.56.196/weather-api/dashboard.php` | Wetter-Übersicht mit Charts |
-| `http://172.23.56.196/weather-api/dashboard.php?tab=feedback` | Feedback-Eingabe (OK/Falsch) |
-| `http://172.23.56.196/weather-api/dashboard.php?tab=analyse` | Feedback-Analyse und Empfehlungen |
-| `http://172.23.56.196/weather-api/dashboard.php?tab=icons` | WMO-Icon-Übersicht (alle Mappings) |
+| `http://WEBSERVER_IP/weather-api/dashboard.php` | Wetter-Übersicht mit Charts |
+| `http://WEBSERVER_IP/weather-api/dashboard.php?tab=feedback` | Feedback-Eingabe (OK/Falsch) |
+| `http://WEBSERVER_IP/weather-api/dashboard.php?tab=analyse` | Feedback-Analyse und Empfehlungen |
+| `http://WEBSERVER_IP/weather-api/dashboard.php?tab=icons` | WMO-Icon-Übersicht (alle Mappings) |
 
 **API-Endpoints:**
 | Endpoint | Methode | Beschreibung |
@@ -232,10 +232,10 @@ Day/Night wird von API geliefert (`is_daylight` bzw. `dayOrNight`)
 
 ## CloudWatcher
 
-- **Host:** CloudWatcher-Pi (172.23.56.60)
+- **Host:** CloudWatcher-Pi (CLOUDWATCHER_IP)
 - **Service:** systemd cloudwatcher.service
-- **Dashboard:** http://172.23.56.60:5000/
-- **API:** http://172.23.56.60:5000/api/data
+- **Dashboard:** http://CLOUDWATCHER_IP:5000/
+- **API:** http://CLOUDWATCHER_IP:5000/api/data
 
 **Liefert:** sky_temp_c, rain_freq, mpsas, heater_pwm, is_raining, is_wet, is_daylight
 
@@ -289,7 +289,7 @@ PostgreSQL auf dem Webserver. Credentials in `db_connect.php` (nicht im Git).
 
 ```php
 // MQTT notification (MagicMirror)
-define('MQTT_BROKER_HOST', '172.23.56.157');  // MagicMirror-Pi (Mosquitto-Broker)
+define('MQTT_BROKER_HOST', 'MQTT_BROKER_IP');  // MagicMirror-Pi (Mosquitto-Broker)
 define('MQTT_BROKER_PORT', 1883);
 define('MQTT_TOPIC', 'weather/aggregator/new_data');
 ```
@@ -351,20 +351,20 @@ pm2 logs MagicMirror --lines 50 | grep "MMM-My-Actual-Weather"
 mosquitto_sub -h localhost -t "weather/aggregator/new_data" -v
 
 # Aggregator API testen
-curl -s "http://172.23.56.196/weather-api/api.php?action=current" | jq
+curl -s "http://WEBSERVER_IP/weather-api/api.php?action=current" | jq
 
 # Aggregator Status
-curl -s "http://172.23.56.196/weather-api/api.php?action=status" | jq
+curl -s "http://WEBSERVER_IP/weather-api/api.php?action=status" | jq
 
 # CloudWatcher API
-curl -s "http://172.23.56.60:5000/api/data" | jq
+curl -s "http://CLOUDWATCHER_IP:5000/api/data" | jq
 
 # PWS-Push simulieren
-curl -X POST "http://172.23.56.196:8000/data/report/" \
+curl -X POST "http://WEBSERVER_IP:8000/data/report/" \
   -d "PASSKEY=test&tempf=50&humidity=80&winddir=180&windspeedmph=5&rainratein=0&dailyrainin=0"
 
 # MQTT manuell testen (vom Webserver)
-ssh pi@172.23.56.196 "mosquitto_pub -h 172.23.56.157 -t 'weather/aggregator/new_data' -m '{\"test\":true}'"
+ssh pi@WEBSERVER_IP "mosquitto_pub -h MQTT_BROKER_IP -t 'weather/aggregator/new_data' -m '{\"test\":true}'"
 ```
 
 ---
