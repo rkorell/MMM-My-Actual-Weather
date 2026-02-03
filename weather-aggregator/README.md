@@ -15,7 +15,7 @@ PHP-basierter Wetterdaten-Aggregator, der PWS- und CloudWatcher-Sensordaten komb
 ```
 ┌─────────────┐  POST :8000/data/report/
 │  PWS        │ ────────────────────────────┐
-│ (IGEROL23)  │                             │
+│ (YOUR_PWS)  │                             │
 └─────────────┘                             ▼
                             ┌────────────────────────────────────────┐
                             │  Webserver (Apache + PHP + PostgreSQL) │
@@ -148,7 +148,7 @@ Der Aggregator publisht nach jedem PWS-Push die vollständigen Wetterdaten zu MQ
 
 ```php
 // config.php
-define('MQTT_BROKER_HOST', '172.23.56.157');  // MagicMirror-Pi
+define('MQTT_BROKER_HOST', 'MQTT_BROKER_IP');  // Your MQTT broker
 define('MQTT_BROKER_PORT', 1883);
 define('MQTT_TOPIC', 'weather/aggregator/new_data');
 ```

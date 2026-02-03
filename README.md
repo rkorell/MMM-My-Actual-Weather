@@ -291,7 +291,7 @@ The weather aggregator is a separate PHP application that runs on a webserver. S
 4. Copy `db_connect.example` to `db_connect.php` and enter credentials
 5. Copy `config.example.php` to `config.php` and adjust settings (CloudWatcher IP, station height, sensor names)
 6. Configure your PWS to push data using the Ecowitt protocol:
-   - **Server IP/Hostname**: `YOUR_SERVER` (e.g., `172.23.56.196`)
+   - **Server IP/Hostname**: `YOUR_WEBSERVER_IP`
    - **Path**: `/data/report/`
    - **Port**: `8000`
    - **Upload Interval**: `60` seconds
