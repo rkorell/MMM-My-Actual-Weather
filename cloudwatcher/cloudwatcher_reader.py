@@ -3,13 +3,16 @@ CloudWatcher RS232 Reader Module
 Modified: 2026-01-25 15:30 - Initial creation
 Modified: 2026-01-28 19:00 - Removed ambient temp (no NTC sensor), added MPSAS support
 Modified: 2026-02-03 14:00 - Added heater PWM reading (Q! command) for rain detection
+Modified: 2026-02-04 19:15 - Added rain sensor temperature (Type 5) for heater control loop
+Modified: 2026-02-04 20:45 - Added set_pwm() method for heater control
+Modified: 2026-02-04 20:55 - Fixed set_pwm() response parsing (device responds with Q, not P)
 
 Handles serial communication with AAG CloudWatcher sensor.
 Protocol based on RS232_Comms_v100 through v140 documentation.
 
 This unit has:
 - IR sensor for sky temperature (S!)
-- Rain sensor Type C (E!)
+- Rain sensor Type C (E!) with integrated heater and NTC thermistor
 - New light sensor for MPSAS (Type 8 in C!)
 - NO ambient temperature sensor (NTC removed, no RH sensor option)
 
@@ -32,6 +35,16 @@ HANDSHAKE_XON = 0x11
 
 # MPSAS calculation constants (from v140 documentation)
 SQ_REFERENCE = 19.6  # Default reference value for sky quality
+
+# Rain sensor NTC thermistor constants (from INDI driver, empirically validated)
+RAIN_PULLUP_KOHM = 9.9      # Pull-up resistor value
+RAIN_RES_AT_25_KOHM = 10.0  # NTC resistance at 25°C
+RAIN_BETA = 3811            # Beta coefficient for Steinhart-Hart
+ABS_ZERO = 273.15           # Absolute zero in Kelvin
+
+# PWM limits
+PWM_MIN = 0
+PWM_MAX = 1023
 
 
 class CloudWatcherReader:
@@ -109,6 +122,10 @@ class CloudWatcherReader:
 
     def _get_expected_blocks(self, cmd: str) -> int:
         """Return expected number of 15-byte blocks for a command."""
+        # Handle Pxxxx! commands (PWM set)
+        if cmd.startswith('P') and cmd.endswith('!'):
+            return 2
+
         block_counts = {
             'S!': 2,  # Sky temperature
             'C!': 5,  # Values (LDR, rain sensor temp, zener, light sensor)
@@ -195,6 +212,37 @@ class CloudWatcherReader:
         except (ValueError, ZeroDivisionError):
             return None
 
+    def _calc_rain_sensor_temp(self, raw_adc: int) -> Optional[float]:
+        """
+        Convert rain sensor NTC thermistor ADC value to temperature in °C.
+
+        Uses Steinhart-Hart equation with constants from INDI driver.
+        The NTC is integrated into the rain sensor for heater control feedback.
+
+        Args:
+            raw_adc: ADC value 0-1023 from Type 5 response
+
+        Returns:
+            Temperature in °C, or None if invalid
+        """
+        # Clamp to valid range (avoid division by zero)
+        if raw_adc > 1022:
+            raw_adc = 1022
+        if raw_adc < 1:
+            return None
+
+        try:
+            # Calculate resistance from voltage divider
+            r_kohm = RAIN_PULLUP_KOHM / ((1023.0 / raw_adc) - 1.0)
+
+            # Steinhart-Hart equation (simplified Beta formula)
+            ln_r = math.log(r_kohm / RAIN_RES_AT_25_KOHM)
+            temp_kelvin = 1.0 / (ln_r / RAIN_BETA + 1.0 / (ABS_ZERO + 25.0))
+
+            return round(temp_kelvin - ABS_ZERO, 2)
+        except (ValueError, ZeroDivisionError):
+            return None
+
     def read_sky_temp(self) -> Optional[float]:
         """Read IR sky temperature in °C."""
         response = self._send_command('S!')
@@ -213,8 +261,11 @@ class CloudWatcherReader:
         """
         Read sensor values from C! command.
 
-        Returns LDR and light sensor raw values.
-        Note: Type 4 (LDR) is estimated by firmware when new light sensor is installed.
+        Returns:
+            ldr_raw: LDR value (Type 4, estimated when new light sensor installed)
+            rain_sensor_temp_raw: NTC ADC value (Type 5, for heater control)
+            rain_sensor_temp_c: Converted temperature in °C
+            light_sensor_raw: Light sensor period (Type 8, for MPSAS)
         """
         response = self._send_command('C!')
         if not response:
@@ -226,6 +277,13 @@ class CloudWatcherReader:
         try:
             if '4' in parsed:
                 result['ldr_raw'] = int(parsed['4'])
+            if '5' in parsed:
+                # Rain sensor NTC thermistor (for heater control feedback)
+                raw_adc = int(parsed['5'])
+                result['rain_sensor_temp_raw'] = raw_adc
+                temp_c = self._calc_rain_sensor_temp(raw_adc)
+                if temp_c is not None:
+                    result['rain_sensor_temp_c'] = temp_c
             if '8' in parsed:
                 # New light sensor raw period (for MPSAS calculation)
                 result['light_sensor_raw'] = int(parsed['8'])
@@ -250,11 +308,9 @@ class CloudWatcherReader:
 
     def read_pwm(self) -> Optional[int]:
         """
-        Read heater PWM duty cycle (0-100%).
+        Read heater PWM duty cycle (0-1023).
 
-        The heater activates when moisture is detected on the rain sensor.
-        PWM > 0 indicates the sensor detected moisture and is actively drying.
-        This can be used as an additional rain/precipitation indicator.
+        Returns the current PWM value set for the rain sensor heater.
         """
         response = self._send_command('Q!')
         if not response:
@@ -267,6 +323,47 @@ class CloudWatcherReader:
             except ValueError:
                 pass
         return None
+
+    def set_pwm(self, value: int) -> bool:
+        """
+        Set heater PWM duty cycle.
+
+        Command format: Pxxxx! where xxxx is 0-1023 (4 digits, zero-padded)
+        Response: !Q followed by the set value (device echoes back as Q-type)
+
+        Args:
+            value: PWM value 0-1023
+
+        Returns:
+            True if command was acknowledged, False otherwise
+        """
+        # Clamp to valid range
+        value = max(PWM_MIN, min(PWM_MAX, value))
+
+        # Format command: Pxxxx! (4-digit zero-padded)
+        cmd = f"P{value:04d}!"
+
+        response = self._send_command(cmd)
+        if not response:
+            logger.error(f"No response to PWM command {cmd}")
+            return False
+
+        parsed = self._parse_response(response)
+
+        # Device responds with Q-type (same as query response)
+        if 'Q' in parsed:
+            try:
+                ack_value = int(parsed['Q'])
+                if ack_value == value:
+                    logger.debug(f"PWM set to {value}")
+                    return True
+                else:
+                    logger.warning(f"PWM mismatch: requested {value}, got {ack_value}")
+                    return True  # Still acknowledge (device accepted it)
+            except ValueError:
+                logger.warning(f"Invalid PWM response: {parsed['Q']}")
+
+        return False
 
     def read_device_info(self) -> Dict:
         """Read device name and firmware version."""
@@ -299,7 +396,8 @@ class CloudWatcherReader:
             rain_freq: Rain sensor frequency (higher = drier)
             is_raining: True if rain_freq < RAIN_THRESHOLD
             is_wet: True if rain_freq < WET_THRESHOLD
-            heater_pwm: Heater duty cycle 0-100% (>0 = moisture detected)
+            heater_pwm: Heater duty cycle 0-1023
+            rain_sensor_temp_c: Rain sensor NTC temperature in °C (for heater control)
             light_sensor_raw: Raw period from new light sensor
             mpsas: Sky quality in mag/arcsec² (if light sensor present)
             is_daylight: True if light level indicates daylight
@@ -310,6 +408,7 @@ class CloudWatcherReader:
         rain_freqs = []
         light_raws = []
         pwm_values = []
+        rain_sensor_temps = []
 
         for _ in range(num_samples):
             # Sky temperature
@@ -317,10 +416,13 @@ class CloudWatcherReader:
             if sky is not None:
                 sky_temps.append(sky)
 
-            # Sensor values (LDR, light sensor)
+            # Sensor values (LDR, rain sensor temp, light sensor)
             values = self.read_values()
-            if values and 'light_sensor_raw' in values:
-                light_raws.append(values['light_sensor_raw'])
+            if values:
+                if 'light_sensor_raw' in values:
+                    light_raws.append(values['light_sensor_raw'])
+                if 'rain_sensor_temp_c' in values:
+                    rain_sensor_temps.append(values['rain_sensor_temp_c'])
 
             # Rain frequency
             rain = self.read_rain_freq()
@@ -353,9 +455,13 @@ class CloudWatcherReader:
             result['is_raining'] = rain_freq < config.RAIN_THRESHOLD
             result['is_wet'] = rain_freq < config.WET_THRESHOLD
 
-        # Heater PWM (0-100%, >0 indicates moisture detected)
+        # Heater PWM (0-1023 raw value)
         if pwm_values:
             result['heater_pwm'] = int(self._filtered_average(pwm_values))
+
+        # Rain sensor temperature (for heater control feedback loop)
+        if rain_sensor_temps:
+            result['rain_sensor_temp_c'] = round(self._filtered_average(rain_sensor_temps), 2)
 
         # Light sensor (MPSAS)
         if light_raws:
@@ -380,9 +486,16 @@ class DummyCloudWatcherReader:
 
     def __init__(self, port: str = None, baudrate: int = None):
         logger.info("Using DummyCloudWatcherReader (no hardware)")
+        self._pwm = 0
 
     def close(self):
         pass
+
+    def set_pwm(self, value: int) -> bool:
+        """Simulate PWM setting."""
+        self._pwm = max(0, min(1023, value))
+        logger.debug(f"Dummy: PWM set to {self._pwm}")
+        return True
 
     def read_all(self, num_samples: int = 5) -> Dict:
         """Return simulated data."""
@@ -391,15 +504,16 @@ class DummyCloudWatcherReader:
         sky = random.uniform(-30, 10)  # Sky temperature (always cold)
         rain_freq = random.randint(1500, 3500)
         mpsas = random.uniform(5, 21)  # 5 = bright daylight, 21 = dark sky
-        # PWM simulates heater activity when wet
-        heater_pwm = random.randint(30, 80) if rain_freq < 2100 else 0
+        # Rain sensor temp slightly above ambient (heated)
+        rain_sensor_temp = random.uniform(10, 25)
 
         return {
             'sky_temp_c': round(sky, 2),
             'rain_freq': rain_freq,
             'is_raining': rain_freq < 1700,
             'is_wet': rain_freq < 2100,
-            'heater_pwm': heater_pwm,
+            'heater_pwm': self._pwm,
+            'rain_sensor_temp_c': round(rain_sensor_temp, 2),
             'light_sensor_raw': random.randint(10, 1000),
             'mpsas': round(mpsas, 2),
             'is_daylight': mpsas < 10,

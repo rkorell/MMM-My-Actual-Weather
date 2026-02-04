@@ -12,6 +12,7 @@
  * Modified: 2026-01-30 - Fixed WMO 55 icon mapping (was freezing, should be normal drizzle)
  * Modified: 2026-01-30 - Added WMO Icon Overview tab with wi-class mappings
  * Modified: 2026-01-30 - Added Feedback tab (mobile-optimized) and Analyse tab
+ * Modified: 2026-02-04 - CloudWatcher: Added Sensor Temp + Heizleistung, moved Tag/Nacht to WMO card
  */
 
 require_once __DIR__ . '/db_connect.php';
@@ -1076,7 +1077,7 @@ $activeTab = $_GET['tab'] ?? 'weather';
                         </td>
                         <td style="vertical-align: middle; padding-left: 20px; text-align: left;">
                             <div class="card-value"><?= $conditionText ?></div>
-                            <div class="card-label">WMO <?= $current['wmo_code'] ?? '—' ?></div>
+                            <div class="card-label">WMO <?= $current['wmo_code'] ?? '—' ?> · <?= $isDaylight ? 'Tag' : 'Nacht' ?></div>
                         </td>
                     </tr>
                 </table>
@@ -1107,25 +1108,26 @@ $activeTab = $_GET['tab'] ?? 'weather';
         <!-- CloudWatcher -->
         <div class="section-title">CloudWatcher</div>
         <div class="card-grid">
+            <?php
+                $isRaining = ($current['cw_is_raining'] === 't' || $current['cw_is_raining'] === true);
+                $heaterPercent = $current['heater_pwm'] !== null ? round($current['heater_pwm'] * 100 / 1023) : null;
+            ?>
             <div class="card">
-                <div class="card-value"><?= $current['rain_freq'] !== null ? $current['rain_freq'] : '—' ?></div>
-                <div class="card-label">Rain Freq</div>
+                <div class="card-value" style="<?= $isRaining ? 'color: #36a2eb;' : '' ?>"><?= $isRaining ? 'Regen' : 'kein Regen' ?></div>
+                <div class="card-label-sub" style="font-size: 1rem; color: var(--text-secondary);"><?= $current['rain_freq'] !== null ? $current['rain_freq'] : '—' ?></div>
+                <div class="card-label">Regensensor</div>
+            </div>
+            <div class="card">
+                <div class="card-value"><?= $current['rain_sensor_temp_c'] !== null ? formatDE($current['rain_sensor_temp_c'], 1) . '°C' : '—' ?></div>
+                <div class="card-label">Sensor Temp</div>
+            </div>
+            <div class="card">
+                <div class="card-value"><?= $heaterPercent !== null ? $heaterPercent . '%' : '—' ?></div>
+                <div class="card-label">Heizleistung</div>
             </div>
             <div class="card">
                 <div class="card-value"><?= $current['mpsas'] !== null ? formatDE($current['mpsas'], 2) : '—' ?></div>
                 <div class="card-label">MPSAS</div>
-            </div>
-            <div class="card">
-                <div class="card-value <?= ($current['cw_is_raining'] === 't' || $current['cw_is_raining'] === true) ? 'bool-yes' : 'bool-no' ?>">
-                    <?= ($current['cw_is_raining'] === 't' || $current['cw_is_raining'] === true) ? 'Ja' : 'Nein' ?>
-                </div>
-                <div class="card-label">Regen?</div>
-            </div>
-            <div class="card">
-                <div class="card-value <?= ($current['cw_is_daylight'] === 't' || $current['cw_is_daylight'] === true) ? 'bool-yes' : 'bool-no' ?>">
-                    <?= ($current['cw_is_daylight'] === 't' || $current['cw_is_daylight'] === true) ? 'Tag' : 'Nacht' ?>
-                </div>
-                <div class="card-label">Tageslicht</div>
             </div>
         </div>
 

@@ -1,6 +1,6 @@
 # MMM-My-Actual-Weather
 
-**Stand: 03.02.2026**
+**Stand: 04.02.2026**
 
 MagicMirror² module displaying weather data from a Personal Weather Station (PWS) combined with CloudWatcher IR sky sensor data. Uses a weather aggregator backend that derives WMO weather codes locally from sensor data and pushes updates via MQTT.
 
@@ -10,7 +10,7 @@ MagicMirror² module displaying weather data from a Personal Weather Station (PW
 - **Weather Aggregator Integration**: Receives weather data from central aggregator via MQTT (with API polling fallback)
 - **CloudWatcher IR Sensor**: Sky temperature measurement for accurate cloud detection
 - **Local WMO Code Derivation**: Weather conditions determined from actual sensor data (no external weather API needed)
-- **Rain Sensor Heater Detection**: Uses CloudWatcher heater PWM as additional precipitation indicator (detects light rain/snow missed by PWS rain gauge)
+- **Rain Sensor Heater Control**: Automatic heater management to keep rain sensor dry and accurate
 - **Wunderground Fallback**: Automatic fallback when aggregator data is stale
 - **Additional Sensors**: Support for up to 2 indoor temperature/humidity sensors
 - **Temperature Color Gradient**: Temperature-dependent color display (configurable)
@@ -22,8 +22,9 @@ MagicMirror² module displaying weather data from a Personal Weather Station (PW
 - [Weather Aggregator](weather-aggregator/README.md) - Backend system documentation (PHP, PostgreSQL, MQTT)
 - [WMO Code Derivation](weather-aggregator/docs/WMO_Ableitungsmoeglichkeiten.md) - Detailed WMO weather code derivation logic (German)
 - [Heater-PWM Analysis](weather-aggregator/docs/Heater-PWM-Analyse.md) - Deep analysis of CloudWatcher rain sensor behavior (German)
-- [CloudWatcher Integration](cloudwatcher/README.md) - CloudWatcher IR sensor service
+- [CloudWatcher Integration](cloudwatcher/README.md) - CloudWatcher IR sensor service with heater control
 - [CloudWatcher Project Documentation](cloudwatcher/cloudwatcher-projekt-dokumentation.md) - CloudWatcher planning and setup (German)
+- [Rain Sensor Heater Control](cloudwatcher/InterfaceDocu/Heizungssteuerung.md) - Detailed heater algorithm and implementation (German)
 - [Audit Log](AUDIT-Log-2026-01-30.md) - Quality audit results and fixes
 
 ## Architecture
@@ -248,12 +249,12 @@ The module expects the following JSON structure from the aggregator API:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `rain_freq` | Integer | CloudWatcher rain sensor frequency (600=wet, 2100=dry) |
-| `heater_pwm` | Integer | Heater PWM duty cycle 0-100% (>0 = moisture detected) |
+| `rain_freq` | Integer | CloudWatcher rain sensor frequency (< 1700=rain, 1700-2100=wet, > 2100=dry) |
+| `heater_pwm` | Integer | Heater PWM value 0-1023 (controlled by cloudwatcher_service.py) |
 | `is_wet` | Boolean | True when rain_freq < 2100 (sensor surface is wet) |
 | `is_raining` | Boolean | True when rain_freq < 1700 (active precipitation) |
 
-The `heater_pwm` value is particularly useful for detecting light precipitation: when PWM > 30% and `is_wet` is true, the WMO derivation treats this as active precipitation even if the PWS rain gauge shows 0 mm/h.
+**Note:** The heater is automatically controlled by the CloudWatcher service to keep the sensor 4-8°C above ambient temperature, preventing condensation and ensuring accurate rain detection. See [Heater Control Documentation](cloudwatcher/InterfaceDocu/Heizungssteuerung.md) for details.
 
 ### Fallback Logic
 
@@ -388,7 +389,8 @@ curl -s "http://CLOUDWATCHER_IP:5000/api/data" | jq
 
 | Date | Description |
 |------|-------------|
-| 2026-02-03 | Rain sensor heater detection: heater_pwm as additional precipitation indicator |
+| 2026-02-04 | Rain sensor heater control: automatic PWM regulation based on ambient temp (ESP sensor) |
+| 2026-02-03 | ~~Rain sensor heater detection~~ (removed - was based on incorrect assumptions) |
 | 2026-02-02 | MQTT real-time updates: aggregator publishes to MQTT, watchdog fallback to API polling |
 | 2026-01-30 | Snow/Freezing logic restructured: snow priority at temp < -2°C, WMO 11 before WMO 45 |
 | 2026-01-30 | Feedback mechanism (OK/Wrong buttons, analysis tab, recommendations), dashboard cosmetics |

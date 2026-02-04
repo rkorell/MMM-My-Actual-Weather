@@ -13,6 +13,7 @@
  *                        WMO 11 (shallow fog) now checked before WMO 45 (fog)
  * Modified: 2026-01-30 - AP 52: SHALLOW_FOG_HUMIDITY_MIN constant instead of hardcoded 95
  * Modified: 2026-02-03 - Added heater_pwm as additional rain indicator (PWM > 30% + is_wet = precipitation)
+ * Modified: 2026-02-04 - Removed heater_pwm hack (was circular logic, PWM is control value not sensor)
  */
 
 require_once __DIR__ . '/config.php';
@@ -42,7 +43,7 @@ require_once __DIR__ . '/config.php';
  *    - Clear/Mainly clear/Partly cloudy/Overcast based on delta
  *
  * @param array $pws PWS data (temp_c, humidity, dewpoint_c, precip_rate_mm, wind_speed_ms)
- * @param array $cw  CloudWatcher data (sky_temp_c, is_raining, is_wet, heater_pwm, rain_freq)
+ * @param array $cw  CloudWatcher data (sky_temp_c, is_raining, rain_freq)
  * @return array ['wmo_code' => int, 'condition' => string, 'delta_c' => float]
  */
 function derive_wmo_code($pws, $cw) {
@@ -65,8 +66,6 @@ function derive_wmo_code($pws, $cw) {
 
     $sky_temp = $cw['sky_temp_c'] ?? null;
     $cw_is_raining = $cw['is_raining'] ?? false;
-    $cw_is_wet = $cw['is_wet'] ?? false;
-    $heater_pwm = $cw['heater_pwm'] ?? 0;
 
     // Calculate delta if we have sky temperature
     if ($sky_temp !== null) {
@@ -82,11 +81,10 @@ function derive_wmo_code($pws, $cw) {
     // ========================================
     // 1. PRECIPITATION (highest priority)
     // ========================================
-    // Heater PWM above threshold indicates sensor detected moisture and is actively drying
-    // Combined with is_wet flag, this provides additional rain detection
-    $heater_threshold = defined('HEATER_PWM_MOISTURE_THRESHOLD') ? HEATER_PWM_MOISTURE_THRESHOLD : 30;
-    $heater_indicates_moisture = ($heater_pwm > $heater_threshold) && $cw_is_wet;
-    $is_precipitating = ($precip_rate > 0) || $cw_is_raining || $heater_indicates_moisture;
+    // Two independent sensors for precipitation detection:
+    // - PWS tipping bucket (precip_rate > 0)
+    // - CloudWatcher capacitive sensor (rain_freq < 1700 Hz = is_raining)
+    $is_precipitating = ($precip_rate > 0) || $cw_is_raining;
 
     if ($is_precipitating) {
         return derive_precipitation_code($temp, $humidity, $precip_rate, $cw_is_raining, $result);
