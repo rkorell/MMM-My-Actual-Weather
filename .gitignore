@@ -18,8 +18,16 @@ Thumbs.db
 *.bak
 *.orig
 
-# Weather-aggregator local config (contains IPs/URLs)
+# Weather-aggregator local config (contains IPs/URLs/credentials)
 weather-aggregator/config.php
+weather-aggregator/db_connect.php
+
+# Environment files
+.env
+.env.*
+
+# Log files
+*.log
 
 # Local test scripts (not for deployment)
 test/
