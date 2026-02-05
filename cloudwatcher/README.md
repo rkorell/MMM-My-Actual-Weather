@@ -1,6 +1,6 @@
 # CloudWatcher Service
 
-**Stand: 04.02.2026**
+**Stand: 05.02.2026**
 
 Web service for AAG CloudWatcher IR sky temperature sensor with integrated rain sensor heater control.
 
@@ -27,7 +27,7 @@ Reads cloud cover and rain sensor data from CloudWatcher sensor via RS232 and pr
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
 │ ESP Temp Sensor │────▶│ CloudWatcher Pi  │────▶│ Weather-Aggregator│
 │ 172.23.56.150   │HTTP │ 172.23.56.60     │HTTP │ 172.23.56.25    │
-│ (Schatten temp) │     │ cloudwatcher_    │     │ pws_receiver.php│
+│ (Schatten+Sonne)│     │ cloudwatcher_    │     │ pws_receiver.php│
 └─────────────────┘     │ service.py       │     └────────┬────────┘
                         │   │                             │
 ┌─────────────────┐     │   ├─ Read sensors              │ MQTT
@@ -37,6 +37,10 @@ Reads cloud cover and rain sensor data from CloudWatcher sensor via RS232 and pr
                                                 │ 172.23.56.157   │
                                                 └─────────────────┘
 ```
+
+**ESP Temp2IoT Sensors:**
+- **Schatten (Shadow):** Shaded sensor - used for heater control (more accurate ambient temp)
+- **Sonne (Sun):** Sun-exposed sensor - for comparison/debugging
 
 ## Rain Sensor Heater Control
 
@@ -61,9 +65,10 @@ HEATER_IMPULSE_TEMP = 10.0  # Ambient threshold (unused, kept for compatibility)
 HEATER_IMPULSE_DURATION = 60   # Impulse duration (seconds)
 HEATER_IMPULSE_CYCLE = 600     # Impulse cycle period (seconds)
 
-# ESP Temperature Sensor
+# ESP Temperature Sensor (Temp2IoT)
 ESP_URL = "http://172.23.56.150/api"
-ESP_SENSOR_NAME = "Schatten"
+ESP_SENSOR_NAME_SHADOW = "Schatten"  # Shaded sensor - used for heater control
+ESP_SENSOR_NAME_SUN = "Sonne"        # Sun-exposed sensor
 ```
 
 ### Monitoring
@@ -78,7 +83,8 @@ Response:
 ```json
 {
   "enabled": true,
-  "ambient_temp_c": 2.6,
+  "esp_temp_shadow_c": 2.6,
+  "esp_temp_sun_c": 5.8,
   "sensor_temp_c": 10.6,
   "delta_c": 8.0,
   "target_pwm": 100,
@@ -152,6 +158,8 @@ Returns JSON for Weather-Aggregator:
   "mpsas": 18.5,
   "is_daylight": false,
   "quality": "ok",
+  "esp_temp_shadow_c": 2.5,
+  "esp_temp_sun_c": 5.8,
   "heater_control": {
     "enabled": true,
     "ambient_temp_c": 2.5,

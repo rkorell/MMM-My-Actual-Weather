@@ -4,7 +4,7 @@
 
 **Autor:** Dr. Ralf Korell
 **Erstellt:** 2026-02-04
-**Version:** 1.5 (Updated: 2026-02-04 21:30 - Bugfix Impulse-Heizung, Dokumentation vervollständigt)
+**Version:** 1.6 (Updated: 2026-02-05 - ESP dual sensors im Dashboard)
 
 ---
 
@@ -927,20 +927,22 @@ HEATER_IMPULSE_CYCLE = 600     # Impulse cycle period (seconds)
    - Oder interner Gerätezustand vor erstem PWM-Kommando
    - Nicht kritisch, aber zur Beobachtung notiert
 
-4. **TODO: ESP Ambient-Temperatur im Dashboard anzeigen (2026-02-04):**
+4. **ERLEDIGT: ESP Ambient-Temperaturen im Dashboard (2026-02-05):**
 
-   **Problem:** Das Weather-Dashboard zeigt `rain_sensor_temp_c` und die PWS-Außentemperatur. Die Heizungssteuerung verwendet aber den ESP "Schatten"-Sensor als Ambient-Referenz. Diese beiden Außentemperaturen können abweichen, was zu Verwirrung führt: Im Dashboard erscheint ein Delta von z.B. 10°C (Sensor vs. PWS), während der Heizungscontroller ein anderes Delta sieht (Sensor vs. ESP) und entsprechend anders regelt.
+   **Ursprüngliches Problem:** Das Weather-Dashboard zeigte `rain_sensor_temp_c` und die PWS-Außentemperatur. Die Heizungssteuerung verwendet aber den ESP "Schatten"-Sensor als Ambient-Referenz - diese Werte können abweichen.
 
-   **Lösung:** Die `ambient_temp_c` vom ESP-Sensor durch die gesamte Kette führen:
+   **Umgesetzte Lösung (erweitert):** Beide ESP-Sensoren (Schatten + Sonne) durch die gesamte Kette:
 
-   1. **CloudWatcher API** liefert bereits `heater_control.ambient_temp_c`
-   2. **pws_receiver.php** erweitern: Feld aus CloudWatcher-Response extrahieren
-   3. **PostgreSQL Schema** erweitern: `ALTER TABLE weather_readings ADD COLUMN esp_ambient_temp_c REAL;`
-   4. **Dashboard** erweitern: ESP Ambient-Temp anzeigen (evtl. als 5. Karte oder Zusatzinfo)
+   1. **CloudWatcher Service** (`cloudwatcher_service.py`): `fetch_esp_temps()` holt beide Sensoren
+   2. **CloudWatcher API**: liefert `esp_temp_shadow_c` und `esp_temp_sun_c`
+   3. **pws_receiver.php**: extrahiert und speichert beide Werte
+   4. **PostgreSQL**: `esp_temp_shadow_c REAL`, `esp_temp_sun_c REAL` (migrate_004)
+   5. **Dashboard**: ESP-Sensor Card mit beiden Temps nebeneinander (Schatten blau, Sonne gelb)
 
-   **Nutzen:** Man sieht im Dashboard exakt die Werte, die der Heizungscontroller verwendet, und kann die Regelung nachvollziehen.
-
-   **Aufwand:** Mittel (DB-Migration, PHP-Änderungen, Dashboard-Anpassung)
+   **Zusätzliche Dashboard-Änderungen:**
+   - MPSAS-Karte entfernt (Astronomie-Wert, nicht relevant für Wetter)
+   - Therapie-Sensor Farbe von gelb auf grün geändert (Farbkollision vermeiden)
+   - Cards vertikal unten ausgerichtet (ruhigeres Layout)
 
 ---
 

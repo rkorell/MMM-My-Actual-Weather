@@ -1,6 +1,6 @@
 # MMM-My-Actual-Weather
 
-**Stand: 04.02.2026**
+**Stand: 05.02.2026**
 
 MagicMirror² module displaying weather data from a Personal Weather Station (PWS) combined with CloudWatcher IR sky sensor data. Uses a weather aggregator backend that derives WMO weather codes locally from sensor data and pushes updates via MQTT.
 
@@ -235,6 +235,9 @@ The module expects the following JSON structure from the aggregator API:
     "delta_c": 9.5,
     "rain_freq": 2048,
     "heater_pwm": 0,
+    "rain_sensor_temp_c": 8.5,
+    "esp_temp_shadow_c": 0.8,
+    "esp_temp_sun_c": 3.2,
     "is_wet": false,
     "wmo_code": 3,
     "condition": "overcast",
@@ -251,6 +254,9 @@ The module expects the following JSON structure from the aggregator API:
 |-------|------|-------------|
 | `rain_freq` | Integer | CloudWatcher rain sensor frequency (< 1700=rain, 1700-2100=wet, > 2100=dry) |
 | `heater_pwm` | Integer | Heater PWM value 0-1023 (controlled by cloudwatcher_service.py) |
+| `rain_sensor_temp_c` | Float | Rain sensor NTC temperature (heater control feedback) |
+| `esp_temp_shadow_c` | Float | ESP ambient temp (shadow sensor) - used for heater control |
+| `esp_temp_sun_c` | Float | ESP ambient temp (sun-exposed sensor) - for comparison |
 | `is_wet` | Boolean | True when rain_freq < 2100 (sensor surface is wet) |
 | `is_raining` | Boolean | True when rain_freq < 1700 (active precipitation) |
 
@@ -389,6 +395,7 @@ curl -s "http://CLOUDWATCHER_IP:5000/api/data" | jq
 
 | Date | Description |
 |------|-------------|
+| 2026-02-05 | ESP dual sensor support: both shadow and sun temps forwarded through pipeline and displayed in dashboard |
 | 2026-02-04 | Rain sensor heater control: automatic PWM regulation based on ambient temp (ESP sensor) |
 | 2026-02-03 | ~~Rain sensor heater detection~~ (removed - was based on incorrect assumptions) |
 | 2026-02-02 | MQTT real-time updates: aggregator publishes to MQTT, watchdog fallback to API polling |
