@@ -14,6 +14,7 @@
  * Modified: 2026-01-30 - Added Feedback tab (mobile-optimized) and Analyse tab
  * Modified: 2026-02-04 - CloudWatcher: Added Sensor Temp + Heizleistung, moved Tag/Nacht to WMO card
  * Modified: 2026-02-05 - Added ESP temps (shadow/sun), replaced MPSAS, changed Therapie color to green
+ * Modified: 2026-02-05 - Charts: snap-to-hour boundaries (stable X-axis labels)
  */
 
 require_once __DIR__ . '/db_connect.php';
@@ -29,12 +30,18 @@ function getCurrentData($pdo) {
 }
 
 /**
- * Get 24h history for chart
+ * Get 24-25h history for chart with snap-to-hour boundaries
+ *
+ * Start: Full hour 24 hours ago (e.g., at 21:35 → start is yesterday 21:00)
+ * End: Current time (data fills up through current hour)
+ *
+ * This gives stable X-axis labels that only shift once per hour,
+ * instead of every minute with a rolling 24h window.
  */
 function getHistoryData($pdo) {
     $sql = "SELECT timestamp, temp_c, temp1_c, temp2_c
             FROM weather_readings
-            WHERE timestamp > NOW() - INTERVAL '24 hours'
+            WHERE timestamp >= date_trunc('hour', NOW() - INTERVAL '24 hours')
             ORDER BY timestamp ASC";
     $stmt = $pdo->query($sql);
     return $stmt->fetchAll();
@@ -193,16 +200,26 @@ if ($current) {
 }
 
 // Prepare chart data
+// Labels: HH:mm for all points
+// Timestamps: Full timestamp for tooltips
+// HourlyIndices: Indices of full-hour data points (for grid/tick positioning)
 $chartLabels = [];
+$chartTimestamps = [];
 $chartOutside = [];
 $chartSensor1 = [];
 $chartSensor2 = [];
-foreach ($history as $row) {
+$hourlyIndices = [];  // Indices where full hours occur
+foreach ($history as $idx => $row) {
     $dt = new DateTime($row['timestamp']);
     $chartLabels[] = $dt->format('H:i');
+    $chartTimestamps[] = $dt->format('d.m. H:i');
     $chartOutside[] = $row['temp_c'];
     $chartSensor1[] = $row['temp1_c'];
     $chartSensor2[] = $row['temp2_c'];
+    // Track indices of full hours
+    if ($dt->format('i') === '00') {
+        $hourlyIndices[] = $idx;
+    }
 }
 
 // Current tab
@@ -1686,6 +1703,13 @@ $activeTab = $_GET['tab'] ?? 'weather';
 
     <?php if ($activeTab === 'weather'): ?>
     <script>
+        // Full timestamps for tooltips (one per data point)
+        const chartTimestamps = <?= json_encode($chartTimestamps) ?>;
+        // Indices of full-hour data points (for grid lines)
+        const hourlyIndices = <?= json_encode($hourlyIndices) ?>;
+        // All labels
+        const chartLabels = <?= json_encode($chartLabels) ?>;
+
         // Common chart options
         const commonOptions = {
             responsive: true,
@@ -1710,6 +1734,11 @@ $activeTab = $_GET['tab'] ?? 'weather';
                     borderColor: '#00bceb',
                     borderWidth: 1,
                     callbacks: {
+                        // Show full timestamp in tooltip title
+                        title: function(context) {
+                            const idx = context[0].dataIndex;
+                            return chartTimestamps[idx] || '';
+                        },
                         label: function(context) {
                             return context.dataset.label + ': ' + (context.parsed.y !== null ? context.parsed.y.toFixed(1).replace('.', ',') + '°C' : '—');
                         }
@@ -1718,9 +1747,21 @@ $activeTab = $_GET['tab'] ?? 'weather';
             },
             scales: {
                 x: {
+                    afterBuildTicks: function(axis) {
+                        // Replace auto-generated ticks with only hourly positions
+                        axis.ticks = hourlyIndices.map(idx => ({ value: idx }));
+                    },
                     ticks: {
                         color: '#aaa',
-                        maxTicksLimit: 12
+                        maxRotation: 0,
+                        callback: function(value, index) {
+                            // Show label only for even hours (every 2nd tick)
+                            const label = chartLabels[value];
+                            if (label && index % 2 === 0) {
+                                return label;
+                            }
+                            return '';
+                        }
                     },
                     grid: {
                         color: 'rgba(255,255,255,0.1)'
