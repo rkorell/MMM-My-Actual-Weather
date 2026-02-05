@@ -13,6 +13,7 @@
  * Modified: 2026-01-30 - Added WMO Icon Overview tab with wi-class mappings
  * Modified: 2026-01-30 - Added Feedback tab (mobile-optimized) and Analyse tab
  * Modified: 2026-02-04 - CloudWatcher: Added Sensor Temp + Heizleistung, moved Tag/Nacht to WMO card
+ * Modified: 2026-02-05 - Added ESP temps (shadow/sun), replaced MPSAS, changed Therapie color to green
  */
 
 require_once __DIR__ . '/db_connect.php';
@@ -228,7 +229,9 @@ $activeTab = $_GET['tab'] ?? 'weather';
             --danger: #f87171;
             --chart-outside: #ff6384;
             --chart-sensor1: #36a2eb;
-            --chart-sensor2: #ffce56;
+            --chart-sensor2: #4ade80;
+            --esp-shadow: #36a2eb;
+            --esp-sun: #ffce56;
         }
 
         * {
@@ -360,6 +363,9 @@ $activeTab = $_GET['tab'] ?? 'weather';
             padding: 20px;
             text-align: center;
             transition: background 0.2s;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
         }
 
         .card:hover {
@@ -1122,12 +1128,21 @@ $activeTab = $_GET['tab'] ?? 'weather';
                 <div class="card-label">Sensor Temp</div>
             </div>
             <div class="card">
-                <div class="card-value"><?= $heaterPercent !== null ? $heaterPercent . '%' : '—' ?></div>
-                <div class="card-label">Heizleistung</div>
+                <div style="display: flex; justify-content: space-around; width: 100%; margin-bottom: 8px;">
+                    <div style="text-align: center;">
+                        <div class="card-value" style="color: var(--esp-shadow);"><?= $current['esp_temp_shadow_c'] !== null ? formatDE($current['esp_temp_shadow_c'], 1) . '°' : '—' ?></div>
+                        <div style="font-size: 0.7rem; color: var(--esp-shadow);">Schatten</div>
+                    </div>
+                    <div style="text-align: center;">
+                        <div class="card-value" style="color: var(--esp-sun);"><?= $current['esp_temp_sun_c'] !== null ? formatDE($current['esp_temp_sun_c'], 1) . '°' : '—' ?></div>
+                        <div style="font-size: 0.7rem; color: var(--esp-sun);">Sonne</div>
+                    </div>
+                </div>
+                <div class="card-label">ESP-Sensor</div>
             </div>
             <div class="card">
-                <div class="card-value"><?= $current['mpsas'] !== null ? formatDE($current['mpsas'], 2) : '—' ?></div>
-                <div class="card-label">MPSAS</div>
+                <div class="card-value"><?= $heaterPercent !== null ? $heaterPercent . '%' : '—' ?></div>
+                <div class="card-label">Heizleistung</div>
             </div>
         </div>
 
@@ -1770,8 +1785,8 @@ $activeTab = $_GET['tab'] ?? 'weather';
                         {
                             label: '<?= SENSOR2_NAME ?>',
                             data: <?= json_encode($chartSensor2) ?>,
-                            borderColor: '#ffce56',
-                            backgroundColor: 'rgba(255, 206, 86, 0.1)',
+                            borderColor: '#4ade80',
+                            backgroundColor: 'rgba(74, 222, 128, 0.1)',
                             borderWidth: 2,
                             tension: 0.3,
                             fill: false,

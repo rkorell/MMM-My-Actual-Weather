@@ -3,6 +3,7 @@
 # Modified: 2026-01-28 19:00 - Updated for Rain Sensor Type C, added MPSAS thresholds
 # Modified: 2026-02-03 14:00 - Adjusted WET_THRESHOLD from 2000 to 2100 (RTS2 calibration)
 # Modified: 2026-02-04 20:50 - Added heater control config, reduced READ_INTERVAL to 10s
+# Modified: 2026-02-05 - Added ESP_SENSOR_NAME_SUN for second ESP sensor
 
 # Serial port settings
 SERIAL_PORT = "/dev/ttyUSB0"
@@ -18,7 +19,8 @@ READ_INTERVAL = 10
 # ESP Temperature Sensor (Temp2IoT)
 # Used for ambient temperature for heater control
 ESP_URL = "http://172.23.56.150/api"
-ESP_SENSOR_NAME = "Schatten"  # Sensor name in ESP response
+ESP_SENSOR_NAME_SHADOW = "Schatten"  # Shaded sensor - used for heater control
+ESP_SENSOR_NAME_SUN = "Sonne"        # Sun-exposed sensor
 ESP_TIMEOUT = 5  # seconds
 
 # Heater control settings (INDI/manufacturer defaults)

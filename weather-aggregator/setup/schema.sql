@@ -3,6 +3,7 @@
 -- Modified: 2026-01-29 - Added humidity1, humidity2 for indoor sensors
 -- Modified: 2026-02-03 - Added heater_pwm for CloudWatcher rain sensor heater status
 -- Modified: 2026-02-04 - Added rain_sensor_temp_c for heater control feedback loop
+-- Modified: 2026-02-05 - Added esp_temp_shadow_c, esp_temp_sun_c for ESP ambient sensors
 --
 -- Run as postgres superuser:
 --   CREATE USER weather_user WITH PASSWORD 'xxx';
@@ -39,6 +40,8 @@ CREATE TABLE IF NOT EXISTS weather_readings (
     mpsas REAL,
     heater_pwm INTEGER,           -- Rain sensor heater PWM 0-1023
     rain_sensor_temp_c REAL,      -- Rain sensor NTC temperature (heater control feedback)
+    esp_temp_shadow_c REAL,       -- ESP ambient temperature (shadow sensor) - used for heater control
+    esp_temp_sun_c REAL,          -- ESP ambient temperature (sun sensor)
     cw_is_raining BOOLEAN,
     cw_is_daylight BOOLEAN,
 

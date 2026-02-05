@@ -15,6 +15,7 @@
  * Modified: 2026-02-03 - Added heater_pwm from CloudWatcher for rain detection
  * Modified: 2026-02-04 - Fixed UV parameter case sensitivity (UV → uv)
  * Modified: 2026-02-04 - Added rain_sensor_temp_c for heater control feedback
+ * Modified: 2026-02-05 - Added esp_temp_shadow_c, esp_temp_sun_c from CloudWatcher
  */
 
 // Error reporting for development (disable in production)
@@ -174,6 +175,8 @@ function fetchCloudWatcherData() {
         'is_wet' => $data['is_wet'] ?? false,
         'heater_pwm' => $data['heater_pwm'] ?? null,
         'rain_sensor_temp_c' => $data['rain_sensor_temp_c'] ?? null,
+        'esp_temp_shadow_c' => $data['esp_temp_shadow_c'] ?? null,
+        'esp_temp_sun_c' => $data['esp_temp_sun_c'] ?? null,
         'is_daylight' => $data['is_daylight'] ?? null,
     ];
 }
@@ -214,6 +217,8 @@ try {
             'is_wet' => null,
             'heater_pwm' => null,
             'rain_sensor_temp_c' => null,
+            'esp_temp_shadow_c' => null,
+            'esp_temp_sun_c' => null,
             'is_daylight' => null,
         ];
     }
@@ -232,7 +237,7 @@ try {
         uv_index, solar_radiation, temp1_c, temp2_c,
         humidity1, humidity2,
         sky_temp_c, rain_freq, mpsas, cw_is_raining, cw_is_daylight,
-        heater_pwm, rain_sensor_temp_c,
+        heater_pwm, rain_sensor_temp_c, esp_temp_shadow_c, esp_temp_sun_c,
         delta_c, wmo_code, condition
     ) VALUES (
         :temp_c, :humidity, :dewpoint_c, :pressure_hpa,
@@ -241,7 +246,7 @@ try {
         :uv_index, :solar_radiation, :temp1_c, :temp2_c,
         :humidity1, :humidity2,
         :sky_temp_c, :rain_freq, :mpsas, :cw_is_raining, :cw_is_daylight,
-        :heater_pwm, :rain_sensor_temp_c,
+        :heater_pwm, :rain_sensor_temp_c, :esp_temp_shadow_c, :esp_temp_sun_c,
         :delta_c, :wmo_code, :condition
     )";
 
@@ -269,6 +274,8 @@ try {
         ':cw_is_daylight' => toBool($cw['is_daylight'] ?? null),
         ':heater_pwm' => $cw['heater_pwm'],
         ':rain_sensor_temp_c' => $cw['rain_sensor_temp_c'],
+        ':esp_temp_shadow_c' => $cw['esp_temp_shadow_c'],
+        ':esp_temp_sun_c' => $cw['esp_temp_sun_c'],
         ':delta_c' => $delta,
         ':wmo_code' => $wmo_code,
         ':condition' => $condition,
@@ -298,6 +305,8 @@ try {
         'mpsas' => $cw['mpsas'],
         'heater_pwm' => $cw['heater_pwm'],
         'rain_sensor_temp_c' => $cw['rain_sensor_temp_c'],
+        'esp_temp_shadow_c' => $cw['esp_temp_shadow_c'],
+        'esp_temp_sun_c' => $cw['esp_temp_sun_c'],
         'is_wet' => $cw['is_wet'],
         'wmo_code' => $wmo_code,
         'condition' => $condition,

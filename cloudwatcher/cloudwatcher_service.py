@@ -6,6 +6,7 @@ Modified: 2026-02-03 14:00 - Added heater_pwm to API response
 Modified: 2026-02-04 19:20 - Added rain_sensor_temp_c for heater control feedback
 Modified: 2026-02-04 20:55 - Added heater control with ESP ambient temperature
 Modified: 2026-02-04 21:00 - BUGFIX: Impulse heating only when WET
+Modified: 2026-02-05 - Fetch both ESP sensors (shadow + sun)
 
 Flask web server providing:
 - HTML dashboard at /
@@ -49,7 +50,8 @@ data_cache: Dict = {
     'device_info': None,
     'error': None,
     'heater_status': None,
-    'ambient_temp': None,
+    'esp_temp_shadow': None,  # ESP ambient temp (shadow sensor) - used for heater control
+    'esp_temp_sun': None,     # ESP ambient temp (sun sensor)
 }
 start_time = datetime.now(timezone.utc)
 
@@ -59,32 +61,42 @@ heater_controller = None
 USE_DUMMY = False  # Set to True for testing without hardware
 
 
-def fetch_ambient_temp() -> Optional[float]:
+def fetch_esp_temps() -> tuple[Optional[float], Optional[float]]:
     """
-    Fetch ambient temperature from ESP sensor (Temp2IoT).
+    Fetch ambient temperatures from ESP sensor (Temp2IoT).
 
     Returns:
-        Temperature in °C, or None if unavailable
+        Tuple of (shadow_temp, sun_temp) in °C, or (None, None) if unavailable
     """
     try:
         req = urllib.request.Request(config.ESP_URL)
         with urllib.request.urlopen(req, timeout=config.ESP_TIMEOUT) as response:
             data = json.loads(response.read().decode('utf-8'))
 
-        # Find the configured sensor in the response
-        for sensor in data.get('sensors', []):
-            if sensor.get('name') == config.ESP_SENSOR_NAME:
-                return float(sensor.get('value'))
+        shadow_temp = None
+        sun_temp = None
 
-        logger.warning(f"Sensor '{config.ESP_SENSOR_NAME}' not found in ESP response")
-        return None
+        # Find both sensors in the response
+        for sensor in data.get('sensors', []):
+            name = sensor.get('name')
+            if name == config.ESP_SENSOR_NAME_SHADOW:
+                shadow_temp = float(sensor.get('value'))
+            elif name == config.ESP_SENSOR_NAME_SUN:
+                sun_temp = float(sensor.get('value'))
+
+        if shadow_temp is None:
+            logger.warning(f"Sensor '{config.ESP_SENSOR_NAME_SHADOW}' not found in ESP response")
+        if sun_temp is None:
+            logger.warning(f"Sensor '{config.ESP_SENSOR_NAME_SUN}' not found in ESP response")
+
+        return shadow_temp, sun_temp
 
     except urllib.error.URLError as e:
         logger.warning(f"ESP fetch failed: {e}")
-        return None
+        return None, None
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as e:
         logger.warning(f"ESP parse error: {e}")
-        return None
+        return None, None
 
 
 def get_data_quality() -> str:
@@ -154,15 +166,16 @@ def background_reader():
 
                 # 2. Heater control (if enabled and data available)
                 if heater_controller and 'rain_sensor_temp_c' in data:
-                    # Fetch ambient temperature from ESP
-                    ambient = fetch_ambient_temp()
-                    data_cache['ambient_temp'] = ambient
+                    # Fetch ambient temperatures from ESP
+                    shadow_temp, sun_temp = fetch_esp_temps()
+                    data_cache['esp_temp_shadow'] = shadow_temp
+                    data_cache['esp_temp_sun'] = sun_temp
 
-                    if ambient is not None:
-                        # Calculate and set PWM
+                    if shadow_temp is not None:
+                        # Calculate and set PWM (using shadow sensor for heater control)
                         pwm, reason = heater_controller.calculate_pwm(
                             sensor_temp=data['rain_sensor_temp_c'],
-                            ambient_temp=ambient,
+                            ambient_temp=shadow_temp,
                             rain_freq=data.get('rain_freq'),
                             wet_threshold=config.WET_THRESHOLD,
                         )
@@ -176,7 +189,7 @@ def background_reader():
                         # Update cache with heater status
                         data_cache['heater_status'] = heater_controller.get_status()
                     else:
-                        logger.debug("No ambient temp available, skipping heater control")
+                        logger.debug("No ESP shadow temp available, skipping heater control")
             else:
                 data_cache['error'] = 'No data received'
                 logger.warning("No data received from sensor")
@@ -266,10 +279,13 @@ def api_data():
         'is_daylight': data.get('is_daylight'),
         'uptime_s': int((datetime.now(timezone.utc) - start_time).total_seconds()),
         'quality': get_data_quality(),
+        # ESP ambient temperatures
+        'esp_temp_shadow_c': data_cache.get('esp_temp_shadow'),
+        'esp_temp_sun_c': data_cache.get('esp_temp_sun'),
         # Heater control info
         'heater_control': {
             'enabled': config.HEATER_ENABLED,
-            'ambient_temp_c': data_cache.get('ambient_temp'),
+            'ambient_temp_c': data_cache.get('esp_temp_shadow'),  # Shadow sensor used for control
             'target_pwm': heater.get('pwm'),
             'reason': heater.get('reason'),
         } if config.HEATER_ENABLED else None,
@@ -287,7 +303,8 @@ def api_raw():
         'device_info': data_cache['device_info'],
         'error': data_cache['error'],
         'heater_status': data_cache.get('heater_status'),
-        'ambient_temp': data_cache.get('ambient_temp'),
+        'esp_temp_shadow': data_cache.get('esp_temp_shadow'),
+        'esp_temp_sun': data_cache.get('esp_temp_sun'),
         'uptime_s': int((datetime.now(timezone.utc) - start_time).total_seconds()),
         'config': {
             'serial_port': config.SERIAL_PORT,
@@ -299,7 +316,8 @@ def api_raw():
             'mpsas_daylight_threshold': config.MPSAS_DAYLIGHT_THRESHOLD,
             'heater_enabled': config.HEATER_ENABLED,
             'esp_url': config.ESP_URL,
-            'esp_sensor': config.ESP_SENSOR_NAME,
+            'esp_sensor_shadow': config.ESP_SENSOR_NAME_SHADOW,
+            'esp_sensor_sun': config.ESP_SENSOR_NAME_SUN,
         }
     })
 
@@ -329,7 +347,8 @@ def api_heater():
     return jsonify({
         'enabled': True,
         'timestamp': data_cache['timestamp'].isoformat() if data_cache['timestamp'] else None,
-        'ambient_temp_c': data_cache.get('ambient_temp'),
+        'esp_temp_shadow_c': data_cache.get('esp_temp_shadow'),
+        'esp_temp_sun_c': data_cache.get('esp_temp_sun'),
         'sensor_temp_c': heater.get('sensor_temp'),
         'delta_c': heater.get('delta'),
         'target_pwm': heater.get('pwm'),
