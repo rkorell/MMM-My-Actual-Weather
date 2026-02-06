@@ -15,6 +15,7 @@
  * Modified: 2026-02-04 - CloudWatcher: Added Sensor Temp + Heizleistung, moved Tag/Nacht to WMO card
  * Modified: 2026-02-05 - Added ESP temps (shadow/sun), replaced MPSAS, changed Therapie color to green
  * Modified: 2026-02-05 - Charts: snap-to-hour boundaries (stable X-axis labels)
+ * Modified: 2026-02-06 - Temperature color gradient for card values (matching MagicMirror module)
  */
 
 require_once __DIR__ . '/db_connect.php';
@@ -79,6 +80,56 @@ function formatTimestamp($timestamp) {
  */
 function formatDE($value, $decimals = 1) {
     return number_format($value, $decimals, ',', '.');
+}
+
+/**
+ * Temperature color gradient (matching MagicMirror module config)
+ * Linear RGB interpolation between support points.
+ */
+$tempColorGradient = [
+    ['temp' => -20, 'r' => 0xb0, 'g' => 0x58, 'b' => 0x99],
+    ['temp' => -14, 'r' => 0x6a, 'g' => 0x44, 'b' => 0x90],
+    ['temp' => -10, 'r' => 0x54, 'g' => 0x46, 'b' => 0x91],
+    ['temp' =>  -5, 'r' => 0x48, 'g' => 0x48, 'b' => 0x94],
+    ['temp' =>  -1, 'r' => 0x54, 'g' => 0x7b, 'b' => 0xbb],
+    ['temp' =>   4, 'r' => 0x70, 'g' => 0xbb, 'b' => 0xe8],
+    ['temp' =>   8, 'r' => 0xc2, 'g' => 0xce, 'b' => 0x2c],
+    ['temp' =>  12, 'r' => 0xec, 'g' => 0xc8, 'b' => 0x2d],
+    ['temp' =>  16, 'r' => 0xee, 'g' => 0xbf, 'b' => 0x2e],
+    ['temp' =>  20, 'r' => 0xee, 'g' => 0xc1, 'b' => 0x2c],
+    ['temp' =>  24, 'r' => 0xe2, 'g' => 0xa6, 'b' => 0x57],
+    ['temp' =>  27, 'r' => 0xdb, 'g' => 0x8f, 'b' => 0x32],
+    ['temp' =>  30, 'r' => 0xbb, 'g' => 0x5a, 'b' => 0x20],
+    ['temp' =>  32, 'r' => 0xc0, 'g' => 0x41, 'b' => 0x17],
+];
+
+function tempToColor($temp, $gradient) {
+    if ($temp === null) return '';
+    $temp = floatval($temp);
+
+    // Below minimum
+    if ($temp <= $gradient[0]['temp']) {
+        $p = $gradient[0];
+        return sprintf('#%02x%02x%02x', $p['r'], $p['g'], $p['b']);
+    }
+    // Above maximum
+    $last = end($gradient);
+    if ($temp >= $last['temp']) {
+        return sprintf('#%02x%02x%02x', $last['r'], $last['g'], $last['b']);
+    }
+    // Find segment and interpolate
+    for ($i = 0; $i < count($gradient) - 1; $i++) {
+        $lo = $gradient[$i];
+        $hi = $gradient[$i + 1];
+        if ($temp >= $lo['temp'] && $temp <= $hi['temp']) {
+            $f = ($temp - $lo['temp']) / ($hi['temp'] - $lo['temp']);
+            $r = round($lo['r'] + $f * ($hi['r'] - $lo['r']));
+            $g = round($lo['g'] + $f * ($hi['g'] - $lo['g']));
+            $b = round($lo['b'] + $f * ($hi['b'] - $lo['b']));
+            return sprintf('#%02x%02x%02x', $r, $g, $b);
+        }
+    }
+    return '';
 }
 
 /**
@@ -244,8 +295,8 @@ $activeTab = $_GET['tab'] ?? 'weather';
             --success: #4ade80;
             --warning: #fbbf24;
             --danger: #f87171;
-            --chart-outside: #ff6384;
-            --chart-sensor1: #36a2eb;
+            --chart-outside: #ff9f43;
+            --chart-sensor1: #c084fc;
             --chart-sensor2: #4ade80;
             --esp-shadow: #36a2eb;
             --esp-sun: #ffce56;
@@ -1048,7 +1099,7 @@ $activeTab = $_GET['tab'] ?? 'weather';
         <div class="section-title">Temperatur</div>
         <div class="card-grid">
             <div class="card">
-                <div class="card-value temp"><?= formatDE($current['temp_c'], 1) ?>°C</div>
+                <div class="card-value" style="color: <?= tempToColor($current['temp_c'], $tempColorGradient) ?>"><?= formatDE($current['temp_c'], 1) ?>°C</div>
                 <div class="card-label">Außen</div>
             </div>
             <div class="card">
@@ -1068,7 +1119,7 @@ $activeTab = $_GET['tab'] ?? 'weather';
                 <div class="card-label">Luftfeuchte</div>
             </div>
             <div class="card">
-                <div class="card-value"><?= $current['dewpoint_c'] !== null ? formatDE($current['dewpoint_c'], 1) . '°C' : '—' ?></div>
+                <div class="card-value" style="color: <?= tempToColor($current['dewpoint_c'], $tempColorGradient) ?>"><?= $current['dewpoint_c'] !== null ? formatDE($current['dewpoint_c'], 1) . '°C' : '—' ?></div>
                 <div class="card-label">Taupunkt</div>
             </div>
             <div class="card">
@@ -1141,17 +1192,17 @@ $activeTab = $_GET['tab'] ?? 'weather';
                 <div class="card-label">Regensensor</div>
             </div>
             <div class="card">
-                <div class="card-value"><?= $current['rain_sensor_temp_c'] !== null ? formatDE($current['rain_sensor_temp_c'], 1) . '°C' : '—' ?></div>
+                <div class="card-value" style="color: <?= tempToColor($current['rain_sensor_temp_c'], $tempColorGradient) ?>"><?= $current['rain_sensor_temp_c'] !== null ? formatDE($current['rain_sensor_temp_c'], 1) . '°C' : '—' ?></div>
                 <div class="card-label">Sensor Temp</div>
             </div>
             <div class="card">
                 <div style="display: flex; justify-content: space-around; width: 100%; margin-bottom: 8px;">
                     <div style="text-align: center;">
-                        <div class="card-value" style="color: var(--esp-shadow);"><?= $current['esp_temp_shadow_c'] !== null ? formatDE($current['esp_temp_shadow_c'], 1) . '°' : '—' ?></div>
+                        <div class="card-value" style="color: <?= tempToColor($current['esp_temp_shadow_c'], $tempColorGradient) ?>"><?= $current['esp_temp_shadow_c'] !== null ? formatDE($current['esp_temp_shadow_c'], 1) . '°' : '—' ?></div>
                         <div style="font-size: 0.7rem; color: var(--esp-shadow);">Schatten</div>
                     </div>
                     <div style="text-align: center;">
-                        <div class="card-value" style="color: var(--esp-sun);"><?= $current['esp_temp_sun_c'] !== null ? formatDE($current['esp_temp_sun_c'], 1) . '°' : '—' ?></div>
+                        <div class="card-value" style="color: <?= tempToColor($current['esp_temp_sun_c'], $tempColorGradient) ?>"><?= $current['esp_temp_sun_c'] !== null ? formatDE($current['esp_temp_sun_c'], 1) . '°' : '—' ?></div>
                         <div style="font-size: 0.7rem; color: var(--esp-sun);">Sonne</div>
                     </div>
                 </div>
@@ -1791,8 +1842,8 @@ $activeTab = $_GET['tab'] ?? 'weather';
                     datasets: [{
                         label: 'Außen',
                         data: <?= json_encode($chartOutside) ?>,
-                        borderColor: '#ff6384',
-                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        borderColor: '#ff9f43',
+                        backgroundColor: 'rgba(255, 159, 67, 0.1)',
                         borderWidth: 2,
                         tension: 0.3,
                         fill: true,
@@ -1815,8 +1866,8 @@ $activeTab = $_GET['tab'] ?? 'weather';
                         {
                             label: '<?= SENSOR1_NAME ?>',
                             data: <?= json_encode($chartSensor1) ?>,
-                            borderColor: '#36a2eb',
-                            backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                            borderColor: '#c084fc',
+                            backgroundColor: 'rgba(192, 132, 252, 0.1)',
                             borderWidth: 2,
                             tension: 0.3,
                             fill: false,
